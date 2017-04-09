@@ -18,20 +18,25 @@ using namespace json;
 
 //std::map<String, var> storedDocs;
 std::vector<PAssembly> views;
-std::map<std::size_t, PAssembly> reduceFunctions;
-
-var doResetCommand(const var &cmd) {
-	views.clear();
-	return true;
-}
+std::map<std::size_t, PAssembly> fncache;
 
 
-static void logOut(const StrViewA & msg) {
+
+ void logOut(const StrViewA & msg) {
 	var x = {"log",msg};
 	x.toStream(std::cout);
 	std::endl(std::cout);
 
 }
+
+ var doResetCommand(const var &cmd) {
+ 	views.clear();
+ 	if (fncache.size() > 50)
+ 		fncache.clear();
+
+ 	return true;
+ }
+
 
 String formatErrorMsg(const var &rejs) {
 	std::ostringstream out;
@@ -88,12 +93,24 @@ var doCommandDDoc(const var &cmd) {
 }
 */
 
-var doAddFun(AssemblyCompiler &compiler, const StrViewA &cmd) {
-	PAssembly a = compiler.compile(cmd);
-	IProc *proc = a->getProc();
-	proc->initLog(&logOut);
+PAssembly compileFunction(AssemblyCompiler& compiler, const StrViewA& cmd) {
+	PAssembly a;
+	StrViewA code = cmd;
+	std::size_t hash = compiler.calcHash(code);
+	auto rf = fncache.find(hash);
+	if (rf == fncache.end()) {
+		a = compiler.compile(code);
+		IProc* proc = a->getProc();
+		proc->initLog(&logOut);
+		fncache.insert(std::make_pair(hash, a));
+	} else {
+		a = rf->second;
+	}
+	return a;
+}
 
-	views.push_back(a);
+var doAddFun(AssemblyCompiler &compiler, const StrViewA &cmd) {
+	views.push_back(compileFunction(compiler,cmd));
 	return true;
 }
 
@@ -103,7 +120,7 @@ var doMapDoc(const var &cmd) {
 	Array r;
 	Array o;
 	IProc::EmitFn emitFn = [&](const Value &key, const Value &value) {
-		o.add({key, value});
+		o.add({key.defined()?key:Value(nullptr), value.defined()?value:Value(nullptr)});
 	};
 	for (PAssembly x : views) {
 		o.clear();
@@ -115,44 +132,38 @@ var doMapDoc(const var &cmd) {
 	return r;
 }
 
-PAssembly compileReduce(AssemblyCompiler& compiler, const Value& cmd) {
-	PAssembly a;
-	StrViewA code = cmd[1].getString();
-	std::size_t hash = compiler.calcHash(code);
-	auto rf = reduceFunctions.find(hash);
-	if (rf == reduceFunctions.end()) {
-		a = compiler.compile(cmd[1].getString());
-		IProc* proc = a->getProc();
-		proc->initLog(&logOut);
-		reduceFunctions.insert(std::make_pair(hash, a));
-	} else {
-		a = rf->second;
-	}
-	return a;
-}
 
 var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
-	PAssembly a = compileReduce(compiler, cmd);
-	IProc *proc = a->getProc();
-	Value orgvalues = cmd[2];
-	RefCntPtr<ArrayValue> values = ArrayValue::create(orgvalues.size());
-	RefCntPtr<ArrayValue> keys = ArrayValue::create(orgvalues.size());
-	for (Value v : orgvalues) {
-		values->push_back(v[1].getHandle());
-		keys->push_back(v[0].getHandle());
+	Array result;
+	Value fns = cmd[1];
+	for (Value f : fns) {
+
+		PAssembly a = compileFunction(compiler, f.getString());
+		IProc *proc = a->getProc();
+		Value orgvalues = cmd[2];
+		RefCntPtr<ArrayValue> values = ArrayValue::create(orgvalues.size());
+		RefCntPtr<ArrayValue> keys = ArrayValue::create(orgvalues.size());
+		for (Value v : orgvalues) {
+			values->push_back(v[1].getHandle());
+			keys->push_back(v[0].getHandle());
+		}
+		result.push_back(proc->reduce(
+							Value(PValue::staticCast(keys)),
+							Value(PValue::staticCast(values)))
+					);
 	}
-	return Value({true,
-		Value(array,
-				{proc->reduce(
-						Value(PValue::staticCast(keys)),
-						Value(PValue::staticCast(values)))
-				})});
+	return Value({true,result});
 }
 
 var doReReduce(AssemblyCompiler &compiler, const Value &cmd) {
-	PAssembly a = compileReduce(compiler,cmd);
-	IProc *proc = a->getProc();
-	return Value({true,Value(array,{proc->rereduce(cmd[2])})});
+	Array result;
+	Value fns = cmd[1];
+	for (Value f : fns) {
+		PAssembly a = compileFunction(compiler,f.getString());
+		IProc *proc = a->getProc();
+		result.push_back(proc->rereduce(cmd[2]));
+	}
+	return Value({true,result});
 }
 
 
@@ -237,7 +248,7 @@ int main(int argc, char **argv) {
 
 
 			var v = Value::fromStream(std::cin);
- 		    logOut(v.toString());
+// 		    logOut(v.toString());
 			var res;
 			try {
 

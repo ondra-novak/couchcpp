@@ -26,7 +26,7 @@ protected:
 
 typedef RefCntPtr<Assembly> PAssembly;
 
-
+void logOut(const StrViewA & msg);
 
 class AssemblyCompiler {
 public:

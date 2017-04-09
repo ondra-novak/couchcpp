@@ -60,13 +60,17 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 			t.write(src.sourceCode.c_str(), src.sourceCode.length());
 		}
 
+
 		String cmdLine({
 			gccPath, " ",
 			gccOpts, " ",
-			src.libraries,
 			" -o ", modulePath,
 			" ", srcPath,
+			" ",src.libraries,
 			" 2>&1"});
+
+		logOut(String({"Compiling source: ", srcPath, " - cmdLine: ", cmdLine}));
+
 
 		FILE *f = popen(cmdLine.c_str(), "r");
 		if (f == NULL) {
@@ -84,6 +88,7 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 		if (!keepSource) unlink(srcPath.c_str());
 	}
 
+	logOut(String({"Loading module: ", modulePath}));
 	PAssembly a = new Assembly(modulePath);
 	return a;
 }
