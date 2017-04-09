@@ -1,0 +1,57 @@
+/*
+ * assembly.h
+ *
+ *  Created on: Apr 9, 2017
+ *      Author: ondra
+ */
+
+#pragma once
+#include "parts/common.h"
+
+typedef IProc *(*EntryPoint)();
+
+class Assembly: public json::RefCntObj {
+public:
+	Assembly(String path);
+	~Assembly();
+
+	IProc *getProc() const {return proc;}
+
+protected:
+
+	void *libHandle;
+	IProc *proc;
+};
+
+
+typedef RefCntPtr<Assembly> PAssembly;
+
+
+
+class AssemblyCompiler {
+public:
+
+	struct SourceInfo {
+		///Complete source ready to compile
+		String sourceCode;
+		///Linker libraries
+		String libraries;
+
+
+	};
+
+	AssemblyCompiler(String cachePath, String gccPath, String gccOpts, bool keepSource);
+
+	PAssembly compile(StrViewA code) const;
+
+	static SourceInfo createSource(StrViewA code) ;
+
+	std::size_t calcHash(const StrViewA code) const;
+
+protected:
+	String cachePath;
+	String gccPath;
+	String gccOpts;
+	bool keepSource;
+
+};

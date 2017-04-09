@@ -1,0 +1,6 @@
+["reset"]
+["add_fun","void mapdoc(Value doc) override {emit(doc[\"_id\"], doc);}"]
+["map_doc",{"_id":"123"}]
+["map_doc",{"_id":"455","payload":"hello world"}]
+["reduce","Value reduce(Value keys, Value values) override {float x = 0;for (Value z:values) { x += z.getNumber();} return x;}",[[["a","a"],10],[["b","b"],20],[["c","c"],30]]]
+["rereduce","Value rereduce(Value values) override {float x = 0;for (Value z:values) { x += z.getNumber();} return x;}",[10,20,30]]]
