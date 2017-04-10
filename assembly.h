@@ -16,11 +16,13 @@ public:
 	~Assembly();
 
 	IProc *getProc() const {return proc;}
+	const String getPath() const {return path;}
 
 protected:
 
 	void *libHandle;
 	IProc *proc;
+	String path;
 };
 
 

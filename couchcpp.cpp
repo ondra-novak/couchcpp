@@ -16,24 +16,37 @@
 using namespace json;
 
 
+
+typedef std::size_t Hash;
+
 //std::map<String, var> storedDocs;
 std::vector<PAssembly> views;
-std::map<std::size_t, PAssembly> fncache;
+std::map<Hash, PAssembly> fncache;
+time_t gcrun  = 0;
 
 
 
- void logOut(const StrViewA & msg) {
+void logOut(const StrViewA & msg) {
 	var x = {"log",msg};
 	x.toStream(std::cout);
 	std::endl(std::cout);
 
 }
 
+void runGC() {
+	time_t x;
+	time(&x);
+	if (x > gcrun) {
+		fncache.clear();
+	}
+	gcrun = x+5;
+}
+
+
+
  var doResetCommand(const var &cmd) {
  	views.clear();
- 	if (fncache.size() > 50)
- 		fncache.clear();
-
+ 	runGC();
  	return true;
  }
 
@@ -94,17 +107,13 @@ var doCommandDDoc(const var &cmd) {
 */
 
 PAssembly compileFunction(AssemblyCompiler& compiler, const StrViewA& cmd) {
-	PAssembly a;
 	StrViewA code = cmd;
 	std::size_t hash = compiler.calcHash(code);
-	auto rf = fncache.find(hash);
-	if (rf == fncache.end()) {
+	PAssembly &a = fncache[hash];
+	if (a == nullptr) {
 		a = compiler.compile(code);
 		IProc* proc = a->getProc();
 		proc->initLog(&logOut);
-		fncache.insert(std::make_pair(hash, a));
-	} else {
-		a = rf->second;
 	}
 	return a;
 }

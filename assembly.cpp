@@ -12,9 +12,9 @@
 #include <cstring>
 #include <fstream>
 
-Assembly::Assembly(String path) {
+Assembly::Assembly(String path):path(path) {
 
-	libHandle = dlopen(path.c_str(),RTLD_LAZY);
+	libHandle = dlopen(path.c_str(),RTLD_NOW);
 	if (libHandle == nullptr)
 		throw std::runtime_error(String({"Cannot open assembly: ", path}).c_str());
 
@@ -25,11 +25,13 @@ Assembly::Assembly(String path) {
 	}
 
 	proc = e();
+	logOut(String({"couchcpp load: ", path}));
 }
 
 Assembly::~Assembly() {
 	proc->onClose();
 	dlclose(libHandle);
+	logOut(String({"couchcpp unload: ", path}));
 }
 
 AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccOpts, bool keepSource)
@@ -88,7 +90,6 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 		if (!keepSource) unlink(srcPath.c_str());
 	}
 
-	logOut(String({"Loading module: ", modulePath}));
 	PAssembly a = new Assembly(modulePath);
 	return a;
 }
