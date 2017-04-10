@@ -33,7 +33,7 @@ key-value pair, you can use function **void emit(Value key, Value value);**
 
 ```
 void mapdoc(Value document) {
-   emit(documet["_id"], document);
+   emit(document["_id"], document["_rev"]);
 }
 ```
 
