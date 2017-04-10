@@ -82,7 +82,7 @@ void mapdoc(Value document) {
 ### step 1 - install imtjson
 
 ```
-$ git clone https://github.com/ondra-novak/imtjson
+$ git clone https://github.com/ondra-novak/imtjson.git
 $ cd imtjson
 $ cmake .
 $ make all
@@ -98,7 +98,7 @@ $ sudo apt install couchdb
 ### step 3 - install couchcpp
 
 ```
-$ git clone https://github.com/ondra-novak/couchcpp
+$ git clone https://github.com/ondra-novak/couchcpp.git
 $ cd couchcpp
 $ cmake .
 $ make all
