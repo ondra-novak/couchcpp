@@ -42,7 +42,7 @@ public:
 
 	};
 
-	AssemblyCompiler(String cachePath, String gccPath, String gccOpts, bool keepSource);
+	AssemblyCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource);
 
 	PAssembly compile(StrViewA code) const;
 
@@ -54,6 +54,7 @@ protected:
 	String cachePath;
 	String gccPath;
 	String gccOpts;
+	String gccLibs;
 	bool keepSource;
 
 };

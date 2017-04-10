@@ -34,10 +34,11 @@ Assembly::~Assembly() {
 	logOut(String({"couchcpp unload: ", path}));
 }
 
-AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccOpts, bool keepSource)
+AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource)
 	:cachePath(cachePath)
 	,gccPath(gccPath)
 	,gccOpts(gccOpts)
+	,gccLibs(gccLibs)
 	,keepSource(keepSource)
 {
 
@@ -69,9 +70,10 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 			" -o ", modulePath,
 			" ", srcPath,
 			" ",src.libraries,
+			" ",gccLibs,
 			" 2>&1"});
 
-		logOut(String({"Compiling source: ", srcPath, " - cmdLine: ", cmdLine}));
+		logOut(String({"couchcpp compile: ", cmdLine}));
 
 
 		FILE *f = popen(cmdLine.c_str(), "r");
@@ -130,6 +132,8 @@ SeparatedSrc separateSrc(StrViewA src) {
 				}
 			} else if (ln.substr(0,2) == "//") {
 				//skip this line
+			} else if (ln.substr(0,6) == "using ") {
+				includes << ln << std::endl;
 			} else {
 				break;
 			}
@@ -155,12 +159,12 @@ AssemblyCompiler::SourceInfo AssemblyCompiler::createSource(StrViewA code){
 	SourceInfo srcinfo;
 	srcinfo.sourceCode = String({
 		src.headers,
-		"#include <parts/common.h>\n"
+		"#include <couchcpp/parts/common.h>\n"
 		"namespace {\n"
 		"class Proc: public AbstractProc {\n"
 		"public:\n", src.source, "};\n"
 		"}\n"
-		"#include <parts/entryPoint.h>\n"});
+		"#include <couchcpp/parts/entryPoint.h>\n"});
 	srcinfo.libraries = src.libs;
 	return srcinfo;
 }

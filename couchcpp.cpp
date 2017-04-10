@@ -247,9 +247,11 @@ int main(int argc, char **argv) {
 		if (!x.defined()) throw std::runtime_error("Missing 'compiler/params' in config");
 		String strparams(x);
 		bool keepSources = cfg["keepSource"].getBool();
+		x = cfg["compiler"]["libs"];
+		String strlibs(x);
 
 
-		AssemblyCompiler compiler(strcache, strcompiler, strparams, keepSources);
+		AssemblyCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
 
 
 		try {
