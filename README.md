@@ -20,7 +20,7 @@ The namespace "json" is always available as well as all functions from the "imtj
 using namespace std;
 
 void mapdoc(Value document) {
-   emit(documet["_id"], document);
+   emit(document["_id"], document["_rev"]);
 }
 ```
 
