@@ -10,13 +10,14 @@ It uses the library "imtjson" to work with documents and other json values
 ## General rules 
 
 Function is written as pure text. You can use preprocesor and also include custom headers.
-The header inclusion must be specified at the top of the function. 
+The header inclusion must be specified at the top of the code 
 
-The namespace "json" is always available as well as all functions from the "imtjson". 
-
+The namespace "json" is always available as well as all functions from the "imtjson". You can also include other namespaces specifying them on the top of the code.
 ```
 #include <utility>
 #include <string>
+
+using namespace std;
 
 void mapdoc(Value document) {
    emit(documet["_id"], document);
