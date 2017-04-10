@@ -3,14 +3,22 @@ add_compile_options(-std=c++11)
 add_executable (couchcpp couchcpp.cpp assembly.cpp) 
 target_link_libraries (couchcpp LINK_PUBLIC imtjson dl)
 
-install(TARGETS couchcpp
+file(GLOB couchcpp_HDR "parts/*.h")
+
+INSTALL(TARGETS couchcpp
         DESTINATION "bin"
         ) 
 INSTALL(FILES couchcpp.ini
         DESTINATION "/etc/couchdb/default.d"
         ) 
 INSTALL(FILES couchcpp.conf
-        DESTINATION "/etc/couchcpp"
+        DESTINATION "/etc/couchdb"
         ) 
         
-install (SCRIPT "${CMAKE_SOURCE_DIR}/PostInstall.cmake")
+INSTALL(FILES ${couchcpp_HDR}
+        DESTINATION "include/couchcpp/parts"
+        )      
+        
+INSTALL (CODE "execute_process(COMMAND mkdir -p /var/cache/couchcpp)")
+INSTALL (CODE "execute_process(COMMAND chown couchdb:couchdb /var/cache/couchcpp)")
+INSTALL (CODE "execute_process(COMMAND service couchdb restart)")

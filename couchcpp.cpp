@@ -197,18 +197,6 @@ static Value loadConfig(const String &path) {
 	return Value::fromStream(input);
 }
 
-static void changeCurrentUser(const String &user) {
-	struct passwd *uinfo = getpwnam(user.c_str());
-	if (uinfo == 0) throw std::runtime_error(String({"Cannot find user:",user}).c_str());
-	if (setuid(uinfo->pw_uid)) throw std::runtime_error(String({"Cannot change to user:",user}).c_str());
-}
-static void changeCurrentGroup(const String &group) {
-	struct group *ginfo = getgrnam(group.c_str());
-	if (ginfo == 0) throw std::runtime_error(String({"Cannot find group:",group}).c_str());
-	if (setgid(ginfo->gr_gid)) throw std::runtime_error(String({"Cannot change to group:",group}).c_str());
-
-}
-
 int main(int argc, char **argv) {
 
 	try {
@@ -231,12 +219,6 @@ int main(int argc, char **argv) {
 		cwd = cfgpath.substr(0, cfgpath.lastIndexOf("/"));
 
 
-
-		Value user = cfg["user"];
-		Value group = cfg["group"];
-		if (!group.getString().empty()) changeCurrentGroup(group.getString());
-		if (!user.getString().empty()) changeCurrentUser(user.getString());
-
 		Value x = cfg["cache"];
 		if (!x.defined()) throw std::runtime_error("Missing 'cache' in config");
 		String strcache = relpath(cwd,String(x));
@@ -246,9 +228,10 @@ int main(int argc, char **argv) {
 		x = cfg["compiler"]["params"];
 		if (!x.defined()) throw std::runtime_error("Missing 'compiler/params' in config");
 		String strparams(x);
-		bool keepSources = cfg["keepSource"].getBool();
 		x = cfg["compiler"]["libs"];
 		String strlibs(x);
+
+		bool keepSources = cfg["keepSource"].getBool();
 
 
 		AssemblyCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);

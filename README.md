@@ -76,3 +76,64 @@ void mapdoc(Value document) {
 }
 ```
 
+## instalation
+
+### step 1 - install imtjson
+
+```
+$ git clone https://github.com/ondra-novak/imtjson
+$ cd imtjson
+$ cmake .
+$ make all
+$ sudo make install
+```
+
+### step 2 - install CouchDB (you can skip this step if the CouchDB is already installed)
+
+```
+$ sudo apt install couchdb
+```
+
+### step 3 - install couchcpp
+
+```
+$ git clone https://github.com/ondra-novak/couchcpp
+$ cd couchcpp
+$ cmake .
+$ make all
+$ sudo make install
+```
+
+Now the language C++ should be available in the Futon
+
+## Configuration
+
+/etc/couchdb/couchcpp.conf
+
+ * **keepSource** - for debugging purpose. The option 'false' (default) causes, that intermediate source
+ files are removed. Set this option to 'true' to leave these files in the cache for inspection.
+ * **cache** - path to the cache. The cache contains compiled functions into modules *.so. The files
+ are never deleted by the application, so the cache can contain many old modules. These modules need to be 
+ be deleted manually. It is possible to empty whole directory enforcing to recompile all of currenly used modules.
+ * **compiler/program** - contains full path to the **g++**
+ * **compiler/param** - options of the program placed before option -o (output) and name of the source file.
+ * **compiler/libs** - libraries and other options placed after the source file. 
+ 
+  
+# Limitations
+
+ * Currently, only map and reduce functions are supported.
+ 
+# Security
+
+ - Running couchcpp under different user - this prevent to the user code to access couchdb's files. 
+  
+  1. create new user and group
+  2. give /usr/local/bin/couchcpp to the new user and group (chown)
+  3. give /var/cache/couchcpp to the new user and group
+  4. set suid-bit on couchcpp
+  5. restart CouchDB
+  
+  
+
+
