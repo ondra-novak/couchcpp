@@ -50,6 +50,8 @@ public:
 
 	std::size_t calcHash(const StrViewA code) const;
 
+
+
 protected:
 	String cachePath;
 	String gccPath;

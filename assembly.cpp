@@ -25,13 +25,13 @@ Assembly::Assembly(String path):path(path) {
 	}
 
 	proc = e();
-	logOut(String({"couchcpp load: ", path}));
+	logOut(String({"load: ", path}));
 }
 
 Assembly::~Assembly() {
 	proc->onClose();
 	dlclose(libHandle);
-	logOut(String({"couchcpp unload: ", path}));
+	logOut(String({"unload: ", path}));
 }
 
 AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource)
@@ -73,7 +73,7 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 			" ",gccLibs,
 			" 2>&1"});
 
-		logOut(String({"couchcpp compile: ", cmdLine}));
+		logOut(String({"compile: ", cmdLine}));
 
 
 		FILE *f = popen(cmdLine.c_str(), "r");
