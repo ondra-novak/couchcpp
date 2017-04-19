@@ -52,28 +52,23 @@ void runGC() {
  }
 
 
-String formatErrorMsg(const var &rejs) {
-	std::ostringstream out;
+class JSONStream {
+public:
+	JSONStream(std::istream &input, std::ostream &output):in(input),out(output) {}
 
-	for (var r : rejs) {
-
-		out << "doc";
-		for (var p : r[0]) {
-			if (p.type() == json::number) {
-				out << "[" << p.getUInt() << "]";
-			} else {
-				out << "." << p.getString();
-			}
-		}
-		out << " : " << r[1].toString() << ". ";
-		out << std::endl;
-
+	json::Value read() {
+		return json::Value::fromStream(in);
 	}
 
-	return String(out.str());
+	void write(json::Value v) {
+		v.toStream(out);
+		out << std::endl;
+	}
 
-
-}
+protected:
+	std::istream &in;
+	std::ostream &out;
+};
 
 
 
@@ -145,16 +140,7 @@ var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
 		IProc *proc = a->getProc();
 		proc->initSetErrorFn(errorFn);
 		Value orgvalues = cmd[2];
-		RefCntPtr<ArrayValue> values = ArrayValue::create(orgvalues.size());
-		RefCntPtr<ArrayValue> keys = ArrayValue::create(orgvalues.size());
-		for (Value v : orgvalues) {
-			values->push_back(v[1].getHandle());
-			keys->push_back(v[0].getHandle());
-		}
-		result.push_back(proc->reduce(
-							Value(PValue::staticCast(keys)),
-							Value(PValue::staticCast(values)))
-					);
+		result.push_back(proc->reduce(IProc::RowSet(orgvalues)));
 	}
 	if (!eobs) return eobs;
 	return Value({true,result});
@@ -214,70 +200,86 @@ var doAddLib(String cachePath, Value lib) {
 
 }
 
-static std::vector<char> outbuffer;
+class TextBuffer {
+public:
+	void clear() {
+		outbuffer.clear();
+	}
+	String str() const {
+		return StrViewA(outbuffer.data(), outbuffer.size());
+	}
+	void push_back(char c) {
+		outbuffer.push_back(c);
+	}
+	void push_back(StrViewA txt) {
+		outbuffer.reserve(outbuffer.size()+txt.length);
+		for (auto c: txt) outbuffer.push_back(c);
+	}
 
-var doCommandDDocShow(IProc *proc, Value args) {
+protected:
+	std::vector<char> outbuffer;
+};
+
+
+static TextBuffer buff;
+
+var doCommandDDocShow(IProc &proc, Value args) {
 	ErrorObserver eobs;
 	IProc::SetErrorFn errorFn = eobs.getFn();
-	outbuffer.clear();
+	buff.clear();
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value request = args[1];
-	proc->initSetErrorFn(eobs.getFn());
-	proc->initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
-			[](const StrViewA &v) {
-					outbuffer.reserve(outbuffer.size()+v.length);
-					for(char c: v) outbuffer.push_back(c);
-	         },[&](const Value &resp) {respObj = resp;});
-	proc->show(doc,request);
+	proc.initSetErrorFn(eobs.getFn());
+	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
+			[](const StrViewA &v) {buff.push_back(v);},
+	         [&](const Value &resp) {respObj = resp;});
+	proc.show(doc,request);
 	if (!eobs) return eobs;
-	return {"resp",respObj.replace(Path::root/"body",String(StrViewA(outbuffer.data(), outbuffer.size())))};
+	return {"resp",respObj.replace(Path::root/"body",buff.str())};
 }
 
-var doCommandDDocUpdates(IProc *proc, Value args) {
+var doCommandDDocUpdates(IProc &proc, Value args) {
 	ErrorObserver eobs;
 	IProc::SetErrorFn errorFn = eobs.getFn();
-	outbuffer.clear();
+	buff.clear();
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value newdoc = doc;
 	Value request = args[1];
-	proc->initSetErrorFn(eobs.getFn());
-	proc->initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
-			[](const StrViewA &v) {
-					outbuffer.reserve(outbuffer.size()+v.length);
-					for(char c: v) outbuffer.push_back(c);
-	         },[&](const Value &resp) {respObj = resp;});
-	proc->update(newdoc,request);
+	proc.initSetErrorFn(eobs.getFn());
+	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
+			[](const StrViewA &v) {buff.push_back(v);},
+			[&](const Value &resp) {respObj = resp;});
+	proc.update(newdoc,request);
 	if (!eobs) return eobs;
 	if (newdoc.isCopyOf(doc)) newdoc = nullptr;
-	return {"up",newdoc,respObj.replace(Path::root/"body",String(StrViewA(outbuffer.data(), outbuffer.size())))};
+	return {"up",newdoc,respObj.replace(Path::root/"body",buff.str())};
 }
 
-var doCommandDDocList(IProc *proc, Value args, std::istream &streamIn, std::ostream &streamOut) {
+var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 	ErrorObserver eobs;
 	IProc::SetErrorFn errorFn = eobs.getFn();
-	outbuffer.clear();
+	buff.clear();
 	Value respObj(json::object);
 	Value head = args[0];
 	Value request = args[1];
 	bool isend = false;
 	bool needstart = true;
-	proc->initSetErrorFn(eobs.getFn());
-	proc->initShowListFns(
+	proc.initSetErrorFn(eobs.getFn());
+	proc.initShowListFns(
 			[&]() -> Value {
 				if (isend) return nullptr;
 				Value s;
 				if (needstart) {
-					s = {"start",Value(json::array,{StrViewA(outbuffer.data(),outbuffer.size())}), respObj};
+					s = {"start",Value(json::array,{buff.str()}), respObj};
 					needstart = false;
 				} else {
-					s = {"chunks",Value(json::array,{StrViewA(outbuffer.data(),outbuffer.size())})};
+					s = {"chunks",Value(json::array,{buff.str()})};
 				}
-				outbuffer.clear();
-				s.toStream(streamOut);
-				streamOut << std::endl;
-				Value r = Value::fromStream(streamIn);
+				buff.clear();
+				stream.write(s);
+				Value r = stream.read();
 				StrViewA cmd = r[0].getString();
 				if (cmd == "list_row") {
 					return r[1];
@@ -286,18 +288,65 @@ var doCommandDDocList(IProc *proc, Value args, std::istream &streamIn, std::ostr
 					return nullptr;
 				}
 			},
-			[](const StrViewA &v) {
-					outbuffer.reserve(outbuffer.size()+v.length);
-					for(char c: v) outbuffer.push_back(c);
-	         },[&](const Value &resp) {respObj = resp;});
+			[](const StrViewA &v) {buff.push_back(v);},
+			[&](const Value &resp) {respObj = resp;});
 
-	proc->list(head,request);
+	proc.list(head,request);
 	if (!eobs) return eobs;
-	return {"end",Value(json::array,{StrViewA(outbuffer.data(),outbuffer.size())})};
+	return {"end",Value(json::array,{buff.str()})};
+}
+
+var doCommandDDocFilters(IProc &proc, Value args) {
+	ErrorObserver eobs;
+	IProc::SetErrorFn errorFn = eobs.getFn();
+	proc.initSetErrorFn(eobs.getFn());
+	Value docs = args[0];
+	Value req = args[1];
+	Array results;
+	results.reserve(docs.size());
+	for (Value doc : docs) {
+		results.push_back(proc.filter(doc,req));
+		if (!eobs) return eobs;
+	}
+	return {true,results};
+}
+
+var doCommandDDocViews(IProc &proc, Value args) {
+	ErrorObserver eobs;
+	bool docres;
+	IProc::SetErrorFn errorFn = eobs.getFn();
+	IProc::EmitFn emitFn =[&docres](Value,Value) {docres = true;};
+	proc.initSetErrorFn(eobs.getFn());
+	proc.initEmit(emitFn);
+	Value docs = args[0];
+
+	Array results;
+	results.reserve(docs.size());
+	for (Value doc : docs) {
+		docres = false;
+		proc.mapdoc(doc);
+		if (!eobs) return eobs;
+		results.push_back(docres);
+	}
+	return {true,results};
+}
+
+var doCommandDDocValidate(IProc &proc, Value args) {
+	ErrorObserver eobs;
+	IProc::SetErrorFn errorFn = eobs.getFn();
+	Value doc = args[0];
+	Value prevDoc = args[1];
+	Value userContext = args[2];
+	Value security = args[3];
+
+	proc.initSetErrorFn(eobs.getFn());
+	proc.validate(doc,IProc::ContextData(prevDoc, userContext, security));
+	if (!eobs) return eobs;
+	return 1;
 }
 
 
-var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, std::istream &streamIn, std::ostream &streamOut) {
+var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, JSONStream &stream) {
 	String id (cmd[1]);
 	if (id == "new") {
 		String id ( cmd[2]);
@@ -325,12 +374,12 @@ var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, std::istream &stre
 		PAssembly a = compileFunction(compiler,fn.getString());
 		IProc *proc = a->getProc();
 
-		if (callType == "shows") return doCommandDDocShow(proc, cmd[3]);
-		else if (callType == "list") return doCommandDDocList(proc, cmd[3], streamIn, streamOut);
-		else if (callType == "updates") return doCommandDDocUpdates(proc, cmd[3]);
-/*		else if (callType == "filters") return doCommandDDocFilters(proc, cmd[3]);
-		else if (callType == "views") return doCommandDDocViews(proc, cmd[3]);
-		else if (callType == "validate_doc_update") return doCommandDDocValidate(proc, cmd[3]);*/
+		if (callType == "shows") return doCommandDDocShow(*proc, cmd[3]);
+		else if (callType == "list") return doCommandDDocList(*proc, cmd[3], stream);
+		else if (callType == "updates") return doCommandDDocUpdates(*proc, cmd[3]);
+		else if (callType == "filters") return doCommandDDocFilters(*proc, cmd[3]);
+		else if (callType == "views") return doCommandDDocViews(*proc, cmd[3]);
+		else if (callType == "validate_doc_update") return doCommandDDocValidate(*proc, cmd[3]);
 		else return {"error","Unsupported","Unsupported feature"};
 	}
 
@@ -356,11 +405,15 @@ static Value loadConfig(const String &path) {
 
 int main(int argc, char **argv) {
 
+	JSONStream stream(std::cin, std::cout);
+
 	try {
 		String cwd = getcwd();
 		String cfgpath = "/etc/couchdb/couchcpp.conf";
 		String appwd = relpath(cwd, argv[0]);
 		cwd = cwd.substr(0,appwd.lastIndexOf("/"));
+
+
 
 		int argp = 1;
 		while (argp < argc) {
@@ -398,7 +451,7 @@ int main(int argc, char **argv) {
 		do {
 
 
-			var v = Value::fromStream(std::cin);
+			var v = stream.read();
 // 		    logOut(v.toString());
 			var res;
 			try {
@@ -410,19 +463,18 @@ int main(int argc, char **argv) {
 				else if (cmd == "reduce") res=doReduce(compiler,v);
 				else if (cmd == "rereduce") res=doReReduce(compiler,v);
 				else if (cmd == "map_doc") res = doMapDoc(v);
-				else if (cmd == "ddoc") res = doCommandDDoc(compiler,v,std::cin, std::cout);
+				else if (cmd == "ddoc") res = doCommandDDoc(compiler,v,stream);
 				else res = {"error","unsupported","Operation is not supported by this query server"};
 
 			} catch (std::exception &e) {
-				res = {"error", "exception",e.what() };
+				res = {"error", "general_error","exception",e.what() };
 			}
-			res.toStream(std::cout);
-			std::cout << std::endl;
+			stream.write(res);
 
 		} while (true);
 
 		} catch (std::exception &e) {
-			std::cout << var({"error", e.what() }).stringify() << std::endl;
+			stream.write({"error","general_error", e.what() });
 		}
 
 	} catch (std::exception &e) {
