@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 add_compile_options(-std=c++11)
-add_executable (couchcpp couchcpp.cpp assembly.cpp) 
+add_executable (couchcpp couchcpp.cpp module.cpp) 
 target_link_libraries (couchcpp LINK_PUBLIC imtjson dl)
 
 file(GLOB couchcpp_HDR "parts/*.h")

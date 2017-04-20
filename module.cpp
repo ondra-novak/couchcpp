@@ -6,13 +6,13 @@
  */
 
 #include <unistd.h>
-#include "assembly.h"
+#include "module.h"
 #include <dlfcn.h>
 #include <imtjson/fnv.h>
 #include <cstring>
 #include <fstream>
 
-Assembly::Assembly(String path):path(path) {
+Module::Module(String path):path(path) {
 
 	libHandle = dlopen(path.c_str(),RTLD_NOW);
 	if (libHandle == nullptr)
@@ -28,13 +28,13 @@ Assembly::Assembly(String path):path(path) {
 	logOut(String({"load: ", path}));
 }
 
-Assembly::~Assembly() {
+Module::~Module() {
 	proc->onClose();
 	dlclose(libHandle);
 	logOut(String({"unload: ", path}));
 }
 
-AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource)
+ModuleCompiler::ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource)
 	:cachePath(cachePath)
 	,gccPath(gccPath)
 	,gccOpts(gccOpts)
@@ -44,7 +44,7 @@ AssemblyCompiler::AssemblyCompiler(String cachePath, String gccPath, String gccO
 
 }
 
-PAssembly AssemblyCompiler::compile(StrViewA code) const {
+PModule ModuleCompiler::compile(StrViewA code) const {
 	std::size_t hash = calcHash(code);
 	String strhash = Value(hash).toString();
 
@@ -92,7 +92,7 @@ PAssembly AssemblyCompiler::compile(StrViewA code) const {
 		if (!keepSource) unlink(srcPath.c_str());
 	}
 
-	PAssembly a = new Assembly(modulePath);
+	PModule a = new Module(modulePath);
 	return a;
 }
 
@@ -152,7 +152,7 @@ SeparatedSrc separateSrc(StrViewA src) {
 }
 
 
-AssemblyCompiler::SourceInfo AssemblyCompiler::createSource(StrViewA code){
+ModuleCompiler::SourceInfo ModuleCompiler::createSource(StrViewA code){
 
 	SeparatedSrc src = separateSrc(code);
 
@@ -169,7 +169,7 @@ AssemblyCompiler::SourceInfo AssemblyCompiler::createSource(StrViewA code){
 	return srcinfo;
 }
 
-std::size_t AssemblyCompiler::calcHash(const StrViewA code) const {
+std::size_t ModuleCompiler::calcHash(const StrViewA code) const {
 
 	StrViewA version(INTERFACE_VERSION);
 	std::size_t h;

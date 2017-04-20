@@ -10,10 +10,10 @@
 
 typedef IProc *(*EntryPoint)();
 
-class Assembly: public json::RefCntObj {
+class Module: public json::RefCntObj {
 public:
-	Assembly(String path);
-	~Assembly();
+	Module(String path);
+	~Module();
 
 	IProc *getProc() const {return proc;}
 	const String getPath() const {return path;}
@@ -26,11 +26,11 @@ protected:
 };
 
 
-typedef RefCntPtr<Assembly> PAssembly;
+typedef RefCntPtr<Module> PModule;
 
 void logOut(const StrViewA & msg);
 
-class AssemblyCompiler {
+class ModuleCompiler {
 public:
 
 	struct SourceInfo {
@@ -42,9 +42,9 @@ public:
 
 	};
 
-	AssemblyCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource);
+	ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource);
 
-	PAssembly compile(StrViewA code) const;
+	PModule compile(StrViewA code) const;
 
 	static SourceInfo createSource(StrViewA code) ;
 

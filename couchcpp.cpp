@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <fstream>
 
-#include "assembly.h"
+#include "module.h"
 
 
 using namespace json;
@@ -21,8 +21,8 @@ using namespace json;
 typedef std::size_t Hash;
 
 std::map<String, var> storedDocs;
-std::vector<PAssembly> views;
-std::map<Hash, PAssembly> fncache;
+std::vector<PModule> views;
+std::map<Hash, PModule> fncache;
 time_t gcrun  = 0;
 
 
@@ -73,10 +73,10 @@ protected:
 
 
 
-PAssembly compileFunction(AssemblyCompiler& compiler, const StrViewA& cmd) {
+PModule compileFunction(ModuleCompiler& compiler, const StrViewA& cmd) {
 	StrViewA code = cmd;
 	std::size_t hash = compiler.calcHash(code);
-	PAssembly &a = fncache[hash];
+	PModule &a = fncache[hash];
 	if (a == nullptr) {
 		a = compiler.compile(code);
 		IProc* proc = a->getProc();
@@ -85,7 +85,7 @@ PAssembly compileFunction(AssemblyCompiler& compiler, const StrViewA& cmd) {
 	return a;
 }
 
-var doAddFun(AssemblyCompiler &compiler, const StrViewA &cmd) {
+var doAddFun(ModuleCompiler &compiler, const StrViewA &cmd) {
 	views.push_back(compileFunction(compiler,cmd));
 	return true;
 }
@@ -99,7 +99,7 @@ var doMapDoc(const var &cmd) {
 		o.add({key.defined()?key:Value(nullptr), value.defined()?value:Value(nullptr)});
 	};
 
-	for (PAssembly x : views) {
+	for (PModule x : views) {
 		o.clear();
 		IProc *p = x->getProc();
 		p->initEmit(emitFn);
@@ -110,13 +110,13 @@ var doMapDoc(const var &cmd) {
 }
 
 
-var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
+var doReduce(ModuleCompiler &compiler, const Value &cmd) {
 
 	Array result;
 	Value fns = cmd[1];
 	for (Value f : fns) {
 
-		PAssembly a = compileFunction(compiler, f.getString());
+		PModule a = compileFunction(compiler, f.getString());
 		IProc *proc = a->getProc();
 		Value orgvalues = cmd[2];
 		result.push_back(proc->reduce(IProc::RowSet(orgvalues)));
@@ -124,12 +124,12 @@ var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
 	return Value({true,result});
 }
 
-var doReReduce(AssemblyCompiler &compiler, const Value &cmd) {
+var doReReduce(ModuleCompiler &compiler, const Value &cmd) {
 
 	Array result;
 	Value fns = cmd[1];
 	for (Value f : fns) {
-		PAssembly a = compileFunction(compiler,f.getString());
+		PModule a = compileFunction(compiler,f.getString());
 		IProc *proc = a->getProc();
 		result.push_back(proc->rereduce(cmd[2]));
 	}
@@ -302,7 +302,7 @@ var doCommandDDocValidate(IProc &proc, Value args) {
 }
 
 
-var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, JSONStream &stream) {
+var doCommandDDoc(ModuleCompiler &compiler, const var &cmd, JSONStream &stream) {
 	String id (cmd[1]);
 	if (id == "new") {
 		String id ( cmd[2]);
@@ -327,7 +327,7 @@ var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, JSONStream &stream
 		}
 
 		StrViewA callType = cmd[2][0].getString();
-		PAssembly a = compileFunction(compiler,fn.getString());
+		PModule a = compileFunction(compiler,fn.getString());
 		IProc *proc = a->getProc();
 
 		if (callType == "shows") return doCommandDDocShow(*proc, cmd[3]);
@@ -400,7 +400,7 @@ int main(int argc, char **argv) {
 		bool keepSources = cfg["keepSource"].getBool();
 
 
-		AssemblyCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
+		ModuleCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
 
 
 		try {
