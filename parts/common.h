@@ -4,7 +4,7 @@
 using namespace json;
 
 
-#define INTERFACE_VERSION "1.0.1"
+#define INTERFACE_VERSION "1.0.2"
 
 
 class IProc {
@@ -15,7 +15,6 @@ public:
 	typedef std::function<Value()> GetRowFn;
 	typedef std::function<void(const StrViewA &)> SendFn;
 	typedef std::function<void(const Value &)> StartFn;
-	typedef std::function<void(Value)> SetErrorFn;
 
 	struct ContextData {
 		Value prevDoc;
@@ -58,6 +57,42 @@ public:
 		RowIterator end() const {return RowIterator(Value::end());}
 
 	};
+
+	class Error: public std::exception {
+	public:
+		Error(String type, String desc):type(type),desc(desc) {}
+
+		String type;
+		String desc;
+
+		const char *what() const throw() {return type.c_str();}
+		virtual ~Error() throw() {}
+
+	};
+
+	class NotFound: public Error {
+	public:
+		NotFound(String what):Error("not_found", what) {}
+	};
+
+
+	enum ValidationDecree {
+		accepted,
+		rejected,
+		forbidden,
+		unauthorized
+	};
+
+	class ValidationResult {
+	public:
+		ValidationResult(bool res):decree(res?accepted:rejected) {}
+		ValidationResult(ValidationDecree decree):decree(decree) {}
+		ValidationResult(ValidationDecree decree, String description):decree(decree),description(description) {}
+
+		ValidationDecree decree;
+		String description;
+	};
+
 
 	typedef const ContextData &Context;
 
@@ -143,7 +178,7 @@ public:
 	 * Once an error reporting function is called, the validation fails right after the function returns. If none
 	 * of error reporting function is called, validation passes.
 	 */
-	virtual void validate(Value doc, Context context) = 0;
+	virtual ValidationResult validate(Value doc, Context context) = 0;
 
 	virtual void onClose() = 0;
 
@@ -151,7 +186,6 @@ public:
 	virtual void initEmit(EmitFn fn) = 0;
 	virtual void initLog(LogFn fn) = 0;
 	virtual void initShowListFns(GetRowFn getrow, SendFn send, StartFn start) = 0;
-	virtual void initSetErrorFn(SetErrorFn fn) = 0;
 
 	virtual ~IProc() {}
 };
@@ -159,12 +193,74 @@ public:
 class AbstractProc: public IProc {
 public:
 
+	///Function emit
+	/** The function is available only for mapdoc function
+	 *
+	 * @code
+	 * void emit(Value key, Value value);
+	 * @endcode
+	 *
+	 * @param key key
+	 * @param value value
+	 *
+	 * The value undefined is converted to null
+	 *
+	 */
 	EmitFn emit;
+
+	///Function log
+	/**
+	 * Function sends line to the couchdb's log. It is always available.
+	 *
+	 * @code
+	 * void log(StrViewA text)
+	 * @endcode
+	 *
+	 * Sends text to couchdb's log. Whole line must be send (it cannot be send per-partes)
+	 */
 	LogFn log;
+
+	///Function getRow
+	/**
+	 * The function retrieves next row from the result.
+	 * The function is available for the functions list(), update() and show().
+	 * For the functions update() and show() returns only one document (the same document from the argument).
+	 * For the function list() it can iterate through the all results in the requested view. Note that
+	 * there is no way to rewind the iteration. It is always one direction only (like a pipe)
+	 *
+	 * @code
+	 * Value getRow();
+	 * @endcode
+	 *
+	 * @return Function returns next row, or null, if there are no more rows
+	 */
 	GetRowFn getRow;
+
+	///Function initiates output and sets parameters for the output - for instance: http headers
+	/**
+	 * The function is available in list(), update() and show()
+	 *
+	 * @code
+	 * void start(Value setting);
+	 * @endcode
+	 *
+	 * @note function must be called before the function getRow is called otherwise the settings is ignored.
+	 * It can be also called many time before the first getRow causing, that settings from the last
+	 * call is applied.
+	 */
 	StartFn start;
+
+	///Function sends text to the output
+	/**
+	 * The function is available in list(), update() and show()
+	 *
+	 * @code
+	 * void send(StrViewA text);
+	 * @endcode
+	 *
+	 * @param text text send to the output. */
+
 	SendFn send;
-	SetErrorFn setError;
 
 
 	virtual void mapdoc(Value ) override{
@@ -191,8 +287,8 @@ public:
 	virtual bool filter(Value , Value ) {
 		throw std::runtime_error("Function 'bool filter(Value doc, Value request)' is not defined");
 	}
-	virtual void validate(Value , Context ) {
-		throw std::runtime_error("Function 'void validate(Value doc, Context context)' is not defined");
+	virtual ValidationResult validate(Value , Context ) {
+		throw std::runtime_error("Function 'ValidationResult validate(Value doc, Context context)' is not defined");
 	};
 
 
@@ -206,35 +302,6 @@ public:
 		this->send = send;
 		this->start = start;
 	}
-	virtual void initSetErrorFn(SetErrorFn fn) {
-		this->setError = fn;
-	}
-
-	///Request authorization
-	void unauthorized() {unauthorized("unauthorized");}
-	///Request authorization
-	/**
-	 * @param a description
-	 */
-	void unauthorized(String a) {setError(json::Object("unauthorized",a));}
-	///Report forbidden access
-	void forbidden() {unauthorized("forbidden");}
-	///Report forbidden access
-	/**
-	 * @param a description
-	 */
-	void forbidden(String a) {setError(json::Object("forbidden",a));}
-	///Report general error
-	/**
-	 * @param errName error name
-	 * @param reason reson of error
-	 */
-	void error(String errName, String reason) {setError(Value({"error",errName,reason}));}
-	///Report not found error
-	/**
-	 * @param what object that missing
-	 */
-	void notFound(String what) {error("not_found",what);}
 };
 
 

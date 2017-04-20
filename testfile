@@ -9,3 +9,84 @@
 ["map_doc",{"_id":"123"}]
 ["map_doc",{"_id":"455","payload":"hello world"}]
 ["reduce",["Value reduce(RowSet rows) override {\n  return rows.size();\n}\n\nValue rereduce(Value values) override {\n unsigned int count = 0;\n  for (Value v : values) count += v.getUInt();\n  return count;\n}"],[[[["cmp",109],"cmp.1ctuaFNPGTAlH3KFT9LV"],"1-2c9fe091bd7ae1ed9fa09f7f5b4d3509"],[[["cmp",123],"cmp.1ctuarNPJA2wAF204bYN"],"1-92220ad88eb2f227381018bb76ce1480"],[[["cmp",125],"cmp.1ctuZENPDYd3rXrQ8fCu"],"1-8a0f22a9d60a5abb7d0d9f149070b162"],[[["cmp",132],"cmp.1ctuZaNPErrqywvUlHDX"],"1-4a36786de056e811e0e6d55d55675765"],[[["cmp",133],"cmp.1ctuaNNPHEJxQ6vZ0IJu"],"1-eb8d47588acb51acea307ba0a02f23d8"],[[["cmp",137],"cmp.1ctuZHNPDkExqiqLnsFu"],"1-42f86ae840c2b7b595e6e5415473c02f"],[[["cmp",138],"cmp.1ctub2NPJxJ1KFUpwyGF"],"1-efb252594c4b752a3961603d7f6a2a80"],[[["cmp",139],"cmp.1ctuX7NP1XTWuxdqBuFw"],"1-ca90d7f74b26a359e2752cf00f3d0d8a"],[[["cmp",140],"cmp.1ctuZkNPFVoGRGENgBYF"],"1-99a5021e8c98fa509685ee00e3e55e9c"],[[["cmp",142],"cmp.1ctuagNPIYvUqe0LnkAi"],"1-34995b63b23487ef62e020fa30364e21"],[[["cmp",146],"cmp.1ctujTNPoKvwDUcPFRMm"],"1-7e7dfecf7de2b1ba64bd1d9d2cec7aa0"],[[["cmp",149],"cmp.1ctuajNPIkmZOSkCvA8v"],"1-2b52795ed98c9155c6d527156c4fc42f"]]]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "validate_doc_update":"ValidationResult validate(Value doc, Context context) {
+            log(doc.toString());
+            log(context.prevDoc.toString());
+            log(context.user.toString());
+            log(context.security.toString());        
+            return unauthorized;}"
+    }]
+[
+    "ddoc",
+    "_design/test",
+    ["validate_doc_update"],
+    [
+        {
+            "_id": "docid",
+            "_rev": "2-e0165f450f6c89dc6b071c075dde3c4d",
+            "score": 10
+        },
+        {
+            "_id": "docid",
+            "_rev": "1-9f798c6ad72a406afdbf470b9eea8375",
+            "score": 4
+        },
+        {
+            "name": "Mike",
+            "roles": ["player"]
+        },
+        {
+            "admins": {},
+            "members": []
+        }
+    ]
+]
+["reset"]
+["add_fun","void mapdoc(Value doc) override {throw Error(\"Snap\",\"This doesn't work\");}"]
+["map_doc",{"_id":"123"}]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "shows":{"test":"void show(Value doc, Value req) {
+            start(Object(\"headers\",Object(\"Content-Type\",\"text/plain\")));
+            send(String({\"Hello \", String(doc[\"_id\"]), \"!\"}));
+           }"
+            }}]
+["ddoc","_design/test",["shows","test"],[{"_id":"CouchDB"},{"info":"request"}]]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "updates":{"test":"void update(Value &doc, Value req) {
+            start(Object(\"headers\",Object(\"Content-Type\",\"text/plain\")));
+            send(\"Hello \");
+            send(doc[\"_id\"].getString());
+            send(\"!\");
+            doc = doc.replace(Path::root/\"_id\",\"whatever\");
+           }"
+           }}]
+["ddoc","_design/test",["updates","test"],[{"_id":"CouchDB"},{"info":"request"}]]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "lists":{"test":"void list(Value head, Value req){
+        Value row;
+        start(Object(\"headers\", Object(\"Content-Type\",\"application/json\")));
+        send(\"{\");
+        send(\"\\\"total_rows\\\":\");send(head[\"total_rows\"].stringify());send(\",\");
+        send(\"\\\"offset\\\":\");send(head[\"offset\"].stringify());send(\",\");
+        send(\"\\\"rows\\\":[\");
+        if (!(row=getRow()).isNull()){
+            send(row.stringify());
+        }
+        while(!(row=getRow()).isNull()){
+            send(\",\");
+            send(row.stringify());
+        }
+        send(\"]}\");}\n"}}]
+["ddoc","_design/test",["lists","test"],[{"total_rows":10,"offset":1},{"info":"request"}]]
+["list_row",{"id":"0cb42c267fe32d4b56b3500bc503e030","key":"0cb42c267fe32d4b56b3500bc503e030","value":"1-967a00dff5e02add41819138abb3284d"}]
+["list_row",{"id":"431926a69504bde41851eb3c18a27b1f","key":"431926a69504bde41851eb3c18a27b1f","value":"1-967a00dff5e02add41819138abb3284d"}]
+["list_end"]

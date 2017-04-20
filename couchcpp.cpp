@@ -72,20 +72,6 @@ protected:
 
 
 
-class ErrorObserver: public Value {
-public:
-
-	class ObserverFn {
-	public:
-		Value &owner;
-		ObserverFn(Value &owner):owner(owner) {}
-		void operator()(Value x) const {owner = x;}
-	};
-
-	ObserverFn getFn()  {return ObserverFn(*this);}
-	bool operator!() const {return defined() && (*this)[0].getString() == "error";}
-
-};
 
 PAssembly compileFunction(AssemblyCompiler& compiler, const StrViewA& cmd) {
 	StrViewA code = cmd;
@@ -107,30 +93,24 @@ var doAddFun(AssemblyCompiler &compiler, const StrViewA &cmd) {
 var doMapDoc(const var &cmd) {
 
 
-	ErrorObserver eobs;
 	Array r;
 	Array o;
 	IProc::EmitFn emitFn = [&](const Value &key, const Value &value) {
 		o.add({key.defined()?key:Value(nullptr), value.defined()?value:Value(nullptr)});
 	};
-	IProc::SetErrorFn errorFn = eobs.getFn();
 
 	for (PAssembly x : views) {
 		o.clear();
 		IProc *p = x->getProc();
 		p->initEmit(emitFn);
-		p->initSetErrorFn(errorFn);
 		p->mapdoc(cmd[1]);
 		r.add(o);
 	}
-	if (!eobs) return eobs;
 	return r;
 }
 
 
 var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 
 	Array result;
 	Value fns = cmd[1];
@@ -138,27 +118,21 @@ var doReduce(AssemblyCompiler &compiler, const Value &cmd) {
 
 		PAssembly a = compileFunction(compiler, f.getString());
 		IProc *proc = a->getProc();
-		proc->initSetErrorFn(errorFn);
 		Value orgvalues = cmd[2];
 		result.push_back(proc->reduce(IProc::RowSet(orgvalues)));
 	}
-	if (!eobs) return eobs;
 	return Value({true,result});
 }
 
 var doReReduce(AssemblyCompiler &compiler, const Value &cmd) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 
 	Array result;
 	Value fns = cmd[1];
 	for (Value f : fns) {
 		PAssembly a = compileFunction(compiler,f.getString());
 		IProc *proc = a->getProc();
-		proc->initSetErrorFn(errorFn);
 		result.push_back(proc->rereduce(cmd[2]));
 	}
-	if (!eobs) return eobs;
 	return Value({true,result});
 }
 
@@ -224,49 +198,38 @@ protected:
 static TextBuffer buff;
 
 var doCommandDDocShow(IProc &proc, Value args) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 	buff.clear();
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value request = args[1];
-	proc.initSetErrorFn(eobs.getFn());
 	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
 			[](const StrViewA &v) {buff.push_back(v);},
 	         [&](const Value &resp) {respObj = resp;});
 	proc.show(doc,request);
-	if (!eobs) return eobs;
 	return {"resp",respObj.replace(Path::root/"body",buff.str())};
 }
 
 var doCommandDDocUpdates(IProc &proc, Value args) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 	buff.clear();
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value newdoc = doc;
 	Value request = args[1];
-	proc.initSetErrorFn(eobs.getFn());
 	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
 			[](const StrViewA &v) {buff.push_back(v);},
 			[&](const Value &resp) {respObj = resp;});
 	proc.update(newdoc,request);
-	if (!eobs) return eobs;
 	if (newdoc.isCopyOf(doc)) newdoc = nullptr;
 	return {"up",newdoc,respObj.replace(Path::root/"body",buff.str())};
 }
 
 var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 	buff.clear();
 	Value respObj(json::object);
 	Value head = args[0];
 	Value request = args[1];
 	bool isend = false;
 	bool needstart = true;
-	proc.initSetErrorFn(eobs.getFn());
 	proc.initShowListFns(
 			[&]() -> Value {
 				if (isend) return nullptr;
@@ -292,31 +255,23 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 			[&](const Value &resp) {respObj = resp;});
 
 	proc.list(head,request);
-	if (!eobs) return eobs;
 	return {"end",Value(json::array,{buff.str()})};
 }
 
 var doCommandDDocFilters(IProc &proc, Value args) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
-	proc.initSetErrorFn(eobs.getFn());
 	Value docs = args[0];
 	Value req = args[1];
 	Array results;
 	results.reserve(docs.size());
 	for (Value doc : docs) {
 		results.push_back(proc.filter(doc,req));
-		if (!eobs) return eobs;
 	}
 	return {true,results};
 }
 
 var doCommandDDocViews(IProc &proc, Value args) {
-	ErrorObserver eobs;
 	bool docres;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 	IProc::EmitFn emitFn =[&docres](Value,Value) {docres = true;};
-	proc.initSetErrorFn(eobs.getFn());
 	proc.initEmit(emitFn);
 	Value docs = args[0];
 
@@ -325,23 +280,24 @@ var doCommandDDocViews(IProc &proc, Value args) {
 	for (Value doc : docs) {
 		docres = false;
 		proc.mapdoc(doc);
-		if (!eobs) return eobs;
 		results.push_back(docres);
 	}
 	return {true,results};
 }
 
 var doCommandDDocValidate(IProc &proc, Value args) {
-	ErrorObserver eobs;
-	IProc::SetErrorFn errorFn = eobs.getFn();
 	Value doc = args[0];
 	Value prevDoc = args[1];
 	Value userContext = args[2];
 	Value security = args[3];
 
-	proc.initSetErrorFn(eobs.getFn());
-	proc.validate(doc,IProc::ContextData(prevDoc, userContext, security));
-	if (!eobs) return eobs;
+	IProc::ValidationResult res = proc.validate(doc,IProc::ContextData(prevDoc, userContext, security));
+	switch (res.decree) {
+	case IProc::accepted: return 1;
+	case IProc::rejected: return {"error","validation_rejected",res.description};
+	case IProc::unauthorized: return Object("unauthorized",res.description);
+	case IProc::forbidden: return Object("forbidden",res.description);
+	}
 	return 1;
 }
 
@@ -375,7 +331,7 @@ var doCommandDDoc(AssemblyCompiler &compiler, const var &cmd, JSONStream &stream
 		IProc *proc = a->getProc();
 
 		if (callType == "shows") return doCommandDDocShow(*proc, cmd[3]);
-		else if (callType == "list") return doCommandDDocList(*proc, cmd[3], stream);
+		else if (callType == "lists") return doCommandDDocList(*proc, cmd[3], stream);
 		else if (callType == "updates") return doCommandDDocUpdates(*proc, cmd[3]);
 		else if (callType == "filters") return doCommandDDocFilters(*proc, cmd[3]);
 		else if (callType == "views") return doCommandDDocViews(*proc, cmd[3]);
@@ -466,8 +422,10 @@ int main(int argc, char **argv) {
 				else if (cmd == "ddoc") res = doCommandDDoc(compiler,v,stream);
 				else res = {"error","unsupported","Operation is not supported by this query server"};
 
+			} catch (const IProc::Error &e) {
+				res = {"error", e.type,e.desc };
 			} catch (std::exception &e) {
-				res = {"error", "general_error","exception",e.what() };
+				res = {"error", "general_error",e.what() };
 			}
 			stream.write(res);
 
