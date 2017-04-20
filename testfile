@@ -90,3 +90,7 @@
 ["list_row",{"id":"0cb42c267fe32d4b56b3500bc503e030","key":"0cb42c267fe32d4b56b3500bc503e030","value":"1-967a00dff5e02add41819138abb3284d"}]
 ["list_row",{"id":"431926a69504bde41851eb3c18a27b1f","key":"431926a69504bde41851eb3c18a27b1f","value":"1-967a00dff5e02add41819138abb3284d"}]
 ["list_end"]
+["reset"]
+["add_lib",{"aaa":{"bbb":"template <typename LogFn> void hello(LogFn log) { log(\"Hello world\");}"}}]
+["add_fun","#include \"aaa/bbb\"\n\nvoid mapdoc(Value doc) override { hello(log);}"]
+["map_doc",{"_id":"123"}]

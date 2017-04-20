@@ -44,9 +44,20 @@ ModuleCompiler::ModuleCompiler(String cachePath, String gccPath, String gccOpts,
 
 }
 
+
+String hashToModuleName(std::size_t sz) {
+	char buff[256];
+	char *c = buff;
+	base64url->encodeBinaryValue(BinaryView(reinterpret_cast<const unsigned char *>(&sz), sizeof(sz)),[&](StrViewA str){
+		std::memcpy(c,str.data,str.length);
+		c+=str.length;
+	});
+	return String({"mod_",StrViewA(buff, c- buff)});
+}
+
 PModule ModuleCompiler::compile(StrViewA code) const {
 	std::size_t hash = calcHash(code);
-	String strhash = Value(hash).toString();
+	String strhash = hashToModuleName(hash);
 
 
 	String modulePath ({cachePath,"/",strhash,".so"});

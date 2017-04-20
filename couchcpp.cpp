@@ -65,6 +65,15 @@ public:
 		out << std::endl;
 	}
 
+	bool isEof() {
+		int c = in.peek();
+		while (c != EOF && isspace(c)) {
+			in.get();
+			c = in.peek();
+		}
+		return c == EOF;
+	}
+
 protected:
 	std::istream &in;
 	std::ostream &out;
@@ -404,7 +413,7 @@ int main(int argc, char **argv) {
 
 
 		try {
-		do {
+		while (!stream.isEof()) {
 
 
 			var v = stream.read();
@@ -429,7 +438,7 @@ int main(int argc, char **argv) {
 			}
 			stream.write(res);
 
-		} while (true);
+		}
 
 		} catch (std::exception &e) {
 			stream.write({"error","general_error", e.what() });
