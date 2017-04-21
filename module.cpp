@@ -71,7 +71,7 @@ PModule ModuleCompiler::compile(StrViewA code) const {
 		String envSrcPath ({envPath,"/", strhash,".cpp"});
 		String envModulePath ({envPath,"/", strhash,".so"});
 
-		SourceInfo src = createSource(code);
+		SourceInfo src = createSource(code,StrViewA());
 		{
 			std::ofstream t(envSrcPath.c_str(),std::ios::out);
 			if (!t) {
@@ -122,13 +122,21 @@ struct SeparatedSrc {
 	String namespaces;
 };
 
-SeparatedSrc separateSrc(StrViewA src) {
+SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 
 
 	std::size_t pos = 0;
+	std::size_t line = 1;
+	bool wasCR = false;
 	auto getNext = [&] {
 		if (pos == src.length) return -1;
-		else return (int)(src[pos++]);
+		else {
+			int i = (int)(src[pos++]);
+			if (i == '\n' && !wasCR) line++;
+			else if (i == '\r') {line++; wasCR = true;}
+			else wasCR = false;
+			return i;
+		}
 	};
 	auto goBack = [&](int howMany) {pos-=howMany;};
 
@@ -208,14 +216,19 @@ SeparatedSrc separateSrc(StrViewA src) {
 	s.headers = StrViewA(includes.data(), includes.size());
 	s.libs = StrViewA(libs.data(),libs.size());
 	s.namespaces = StrViewA(namespaces.data(),namespaces.size());
-	s.source = src.substr(pos);
+	if (lineMarkerFile.empty()) {
+		s.source = src.substr(pos);
+	} else {
+		s.source = {"#line ",Value(line).toString(), " \"", lineMarkerFile,"\"\n",src.substr(pos) };
+	}
 	return s;
 }
 
 
-ModuleCompiler::SourceInfo ModuleCompiler::createSource(StrViewA code){
 
-	SeparatedSrc src = separateSrc(code);
+ModuleCompiler::SourceInfo ModuleCompiler::createSource(StrViewA code, String lineMarkerFile){
+
+	SeparatedSrc src = separateSrc(code, lineMarkerFile);
 
 	SourceInfo srcinfo;
 	srcinfo.sourceCode = String({
@@ -309,4 +322,45 @@ void ModuleCompiler::dropEnv() {
 
 ModuleCompiler::~ModuleCompiler() {
 	dropEnv();
+}
+
+int ModuleCompiler::tryCompile(String file) {
+	std::ifstream in(file.c_str(), std::ios::in);
+	if (!in) {
+		std::cerr << "Failed to open:" << file;
+		return 1;
+	}
+
+	auto s = [&in]{
+	  std::ostringstream ss{};
+	  ss << in.rdbuf();
+	  return ss.str();
+	}();
+
+	SourceInfo src = createSource(s,file);
+	String tmpSrc ({file,"-tmp.cpp"});
+	String tmpObj ({file,"-tmp.so"});
+
+	{
+		std::ofstream t(tmpSrc.c_str(),std::ios::out);
+		if (!t) {
+			std::cout << "Failed to create temporary file: " << tmpSrc << std::endl;
+			return 1;
+		}
+		t.write(src.sourceCode.c_str(), src.sourceCode.length());
+	}
+
+
+	String cmdLine({
+		gccPath, " ",
+		gccOpts, " ",
+		" -o ", tmpObj,
+		" ", tmpSrc,
+		" ",src.libraries,
+		" ",gccLibs});
+
+	int res = system(cmdLine.c_str());
+	remove(tmpSrc.c_str());
+	remove(tmpObj.c_str());
+	return res;
 }

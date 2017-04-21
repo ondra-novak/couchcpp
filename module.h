@@ -47,7 +47,7 @@ public:
 
 	PModule compile(StrViewA code) const;
 
-	static SourceInfo createSource(StrViewA code) ;
+	static SourceInfo createSource(StrViewA code, String lineMarkerFile) ;
 
 	std::size_t calcHash(const StrViewA code) const;
 
@@ -57,6 +57,8 @@ public:
 
 	String prepareEnv() const;
 	void dropEnv();
+
+	int tryCompile(String file);
 
 protected:
 	String cachePath;

@@ -352,6 +352,7 @@ int main(int argc, char **argv) {
 	try {
 		String cwd = getcwd();
 		String cfgpath = "/etc/couchdb/couchcpp.conf";
+		String tryCompile;
 		String appwd = relpath(cwd, argv[0]);
 		cwd = cwd.substr(0,appwd.lastIndexOf("/"));
 
@@ -363,6 +364,20 @@ int main(int argc, char **argv) {
 			if (a == "-f") {
 				if (argp >= argc) throw std::runtime_error("Missing argument after -f");
 				cfgpath = argv[argp++];
+			}
+			else if (a == "-c") {
+				if (argp >= argc) throw std::runtime_error("Missing argument after -c");
+				tryCompile = argv[argp++];
+			}
+			else if (a == "-h") {
+				std::cerr << argv[0] << " -f <config> [ -c <file> ]" << std::endl;
+				std::cerr << std::endl;
+				std::cerr << "-f\tSpecifies path to configuration file (mandatory)" << std::endl;
+				std::cerr << std::endl;
+				std::cerr << "-c\tOpens specified file and tries to compile function in it." << std::endl;
+				std::cerr << "\tIt doesn't generate module. In case that compiler fails, " << std::endl
+						  << "\ta report is send to standard error (and return value indicates error)" << std::endl;
+				return 1;
 			}
 		}
 
@@ -388,6 +403,9 @@ int main(int argc, char **argv) {
 
 		ModuleCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
 
+		if (!tryCompile.empty()) {
+			return compiler.tryCompile(tryCompile);
+		}
 
 		try {
 		while (!stream.isEof()) {
