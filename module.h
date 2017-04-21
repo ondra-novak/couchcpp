@@ -43,6 +43,7 @@ public:
 	};
 
 	ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource);
+	~ModuleCompiler();
 
 	PModule compile(StrViewA code) const;
 
@@ -51,12 +52,26 @@ public:
 	std::size_t calcHash(const StrViewA code) const;
 
 
+	void setSharedCode(Value sharedCode);
+
+
+	String prepareEnv() const;
+	void dropEnv();
 
 protected:
 	String cachePath;
 	String gccPath;
 	String gccOpts;
 	String gccLibs;
+	mutable String envPath;
+
+	Value sharedCode;
+
 	bool keepSource;
 
+};
+
+class CompileError: public std::runtime_error {
+public:
+	CompileError(std::string error):std::runtime_error(error) {}
 };

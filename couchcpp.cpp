@@ -45,9 +45,10 @@ void runGC() {
 
 
 
- var doResetCommand(const var &cmd) {
+ var doResetCommand(ModuleCompiler &comp, const var &cmd) {
  	views.clear();
  	runGC();
+ 	comp.dropEnv();
  	return true;
  }
 
@@ -153,34 +154,10 @@ static String relpath(const StrViewA &abspath, const String &relpath) {
 }
 
 
-var doAddLib(String cachePath, Value lib) {
+var doAddLib(ModuleCompiler &compiler,  Value lib) {
 
-	//logOut(lib.toString());
-	for (Value x : lib) {
-		StrViewA key = x.getKey();
-		if (!key.empty()) {
-			String path = relpath(cachePath, key);
-			if (x.type() == json::object) {
-				mkdir(path.c_str(),0777); //will be modified by umask
-				doAddLib(path,x);
-			} else if (x.type() == json::string) {
-				StrViewA content = x.getString();
-				std::ofstream outf(path.c_str(), std::ios::out| std::ios::trunc);
-				if (!outf) {
-					throw std::runtime_error(String({"Unable to write to file:", path}).c_str());
-				}
-				outf.write(content.data, content.length);
-				logOut(String({"Imported: ", path}));
-			} else {
-				logOut(String({"Warning: Can't import :",x.toString()}));
-			}
-		} else {
-			logOut(String({"Skipping an empty key for: ", lib.toString()}));
-		}
-	}
+	compiler.setSharedCode(lib);
 	return true;
-
-
 }
 
 class TextBuffer {
@@ -422,8 +399,8 @@ int main(int argc, char **argv) {
 			try {
 
 				String cmd ( v[0]);
-				if (cmd == "reset") res = doResetCommand(v);
-				else if (cmd == "add_lib") res=doAddLib(strcache,v[1]);
+				if (cmd == "reset") res = doResetCommand(compiler,v);
+				else if (cmd == "add_lib") res=doAddLib(compiler,v[1]);
 				else if (cmd == "add_fun") res=doAddFun(compiler,v[1].getString());
 				else if (cmd == "reduce") res=doReduce(compiler,v);
 				else if (cmd == "rereduce") res=doReReduce(compiler,v);
@@ -431,6 +408,8 @@ int main(int argc, char **argv) {
 				else if (cmd == "ddoc") res = doCommandDDoc(compiler,v,stream);
 				else res = {"error","unsupported","Operation is not supported by this query server"};
 
+			} catch (const CompileError &e) {
+				res = {"error","compile_error",e.what()};
 			} catch (const IProc::Error &e) {
 				res = {"error", e.type,e.desc };
 			} catch (std::exception &e) {
