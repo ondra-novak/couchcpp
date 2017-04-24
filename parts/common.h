@@ -17,40 +17,77 @@ namespace {
 typedef json::Value Document;
 typedef json::Value Key;
 
-
+///Contains context of the validation
 struct ContextData {
+	///Previous document. Can be null for first document
 	Document prevDoc;
+	///User which updates the document
 	Value user;
+	///security informations
 	Value security;
 
 	ContextData(Document prevDoc,Value user,Value security):prevDoc(prevDoc),user(user),security(security) {}
 };
 
 
+///Single row of RowSet for the reduce() function
+/**
+ * You can receive Row as result of iteration (through the RowIterator or range-based for
+ *
+ */
 class Row {
 public:
+	///Key
 	Key key;
+	///Value
 	Value value;
+	///Document ID
 	StrViewA docId;
 
 	Row(Value row):key(row[0][0]),value(row[1]),docId(row[0][1].getString()) {}
 };
 
+///Single row of result for the list() function
+/**
+ * You can receive ListRow as result of getRow() function
+ */
 class ListRow: public Value {
 public:
 	ListRow():json::Value(nullptr) {}
 	ListRow(const Value &v):json::Value(v) {}
 
+	///Retrieves key
 	Value getKey() const {return Value::operator[]("key");}
+	///Retrieves value
 	Value getValue() const {return Value::operator[]("value");}
+	///Retrieves ID
 	Value getID() const {return Value::operator[]("id");}
+	///Retrieves documenr (can be NULL, if document is not present)
 	Document getDoc() const {return Value::operator[]("doc");}
 
+	///Returns true, when ListRow contains a row.
+	/**
+	 * @retval true row exists
+	 * @retval false end of list (no row)
+	 */
 	operator bool() const {return !isNull();}
+	///Returns false, when ListRow contains a row.
+	/**
+	 * @retval false row exists
+	 * @retval true end of list (no row)
+	 */
 	bool operator!() const {return isNull();}
 };
 
 
+///Iterates through the RowSet
+/**
+ * The RowSet is available in the reduce()
+ *
+ * @note iterator is very limited. It is better to use range-based for
+ *
+ * @see RowSet
+ */
 class RowIterator: public ValueIterator {
 public:
 	RowIterator(const ValueIterator &iter):ValueIterator(iter) {}
@@ -63,6 +100,23 @@ public:
 	typedef std::intptr_t  difference_type;
 };
 
+///Contains sets of rows for reduction
+/**
+ * RowSet is avaiable in the function reduce().
+ *
+ * You can only iterate RowSet. Because the RowSet inherits the Value, you can
+ * access rows directly. However it is much easier to perform range-based iteration
+ *
+ * @code
+ * Value reduce(RowSet rowSet) {
+ *   for (Row r : rowSet) {
+ *   	// puts each row to the variable "r"
+ *
+ *   }
+ * }
+ * @endcode
+ *
+ */
 class RowSet: public Value {
 public:
 
@@ -73,6 +127,10 @@ public:
 
 };
 
+///Exception object
+/** throwing this object from any function causes that error is reported
+ * to the CouchDB. You can specify type of error and description
+ */
 class Error: public std::exception {
 public:
 	Error(String type, String desc):type(type),desc(desc) {}
@@ -85,7 +143,7 @@ public:
 
 };
 
-
+///Exception object
 class NotFound: public Error {
 public:
 	NotFound(String what):Error("not_found", what) {}
