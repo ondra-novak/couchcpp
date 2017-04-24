@@ -129,7 +129,7 @@ var doReduce(ModuleCompiler &compiler, const Value &cmd) {
 		PModule a = compileFunction(compiler, f.getString());
 		IProc *proc = a->getProc();
 		Value orgvalues = cmd[2];
-		result.push_back(proc->reduce(IProc::RowSet(orgvalues)));
+		result.push_back(proc->reduce(RowSet(orgvalues)));
 	}
 	return Value({true,result});
 }
@@ -277,12 +277,12 @@ var doCommandDDocValidate(IProc &proc, Value args) {
 	Value userContext = args[2];
 	Value security = args[3];
 
-	IProc::ValidationResult res = proc.validate(doc,IProc::ContextData(prevDoc, userContext, security));
+	ValidationResult res = proc.validate(doc,ContextData(prevDoc, userContext, security));
 	switch (res.decree) {
-	case IProc::accepted: return 1;
-	case IProc::rejected: return {"error","validation_rejected",res.description};
-	case IProc::unauthorized: return Object("unauthorized",res.description);
-	case IProc::forbidden: return Object("forbidden",res.description);
+	case accepted: return 1;
+	case rejected: return {"error","validation_rejected",res.description};
+	case unauthorized: return Object("unauthorized",res.description);
+	case forbidden: return Object("forbidden",res.description);
 	}
 	return 1;
 }
@@ -353,8 +353,6 @@ int main(int argc, char **argv) {
 		String cwd = getcwd();
 		String cfgpath = "/etc/couchdb/couchcpp.conf";
 		String tryCompile;
-		String appwd = relpath(cwd, argv[0]);
-		cwd = cwd.substr(0,appwd.lastIndexOf("/"));
 
 
 
@@ -367,16 +365,24 @@ int main(int argc, char **argv) {
 			}
 			else if (a == "-c") {
 				if (argp >= argc) throw std::runtime_error("Missing argument after -c");
-				tryCompile = argv[argp++];
+				tryCompile = relpath(cwd,argv[argp++]);
+			}
+			else if (a == "-l") {
+				if (argp >= argc) throw std::runtime_error("Missing argument after -l");
+				String absdir = relpath(cwd,argv[argp++]);
+				if (chdir(absdir.c_str())) {
+					std::cerr << "Failed to change directory (ignored): " << absdir << std::endl;
+				}
 			}
 			else if (a == "-h") {
-				std::cerr << argv[0] << " -f <config> [ -c <file> ]" << std::endl;
+				std::cerr << argv[0] << " -f <config> [ -c <file> [ -l <dir>] ]" << std::endl;
 				std::cerr << std::endl;
 				std::cerr << "-f\tSpecifies path to configuration file (mandatory)" << std::endl;
 				std::cerr << std::endl;
 				std::cerr << "-c\tOpens specified file and tries to compile function in it." << std::endl;
 				std::cerr << "\tIt doesn't generate module. In case that compiler fails, " << std::endl
 						  << "\ta report is send to standard error (and return value indicates error)" << std::endl;
+				std::cerr << "-l\tSpecify path to lib directory" << std::endl << std::endl;
 				return 1;
 			}
 		}
@@ -407,6 +413,10 @@ int main(int argc, char **argv) {
 			return compiler.tryCompile(tryCompile);
 		}
 
+		logOut("MIT License - Copyright (c) 2017 Ondrej Novak");
+		logOut("Project origin: https://github.com/ondra-novak/couchcpp");
+		logOut("Use -h for help");
+
 		try {
 		while (!stream.isEof()) {
 
@@ -428,7 +438,7 @@ int main(int argc, char **argv) {
 
 			} catch (const CompileError &e) {
 				res = {"error","compile_error",e.what()};
-			} catch (const IProc::Error &e) {
+			} catch (const Error &e) {
 				res = {"error", e.type,e.desc };
 			} catch (std::exception &e) {
 				res = {"error", "general_error",e.what() };

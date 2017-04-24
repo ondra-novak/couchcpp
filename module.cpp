@@ -71,7 +71,7 @@ PModule ModuleCompiler::compile(StrViewA code) const {
 		String envSrcPath ({envPath,"/", strhash,".cpp"});
 		String envModulePath ({envPath,"/", strhash,".so"});
 
-		SourceInfo src = createSource(code,StrViewA());
+		SourceInfo src = createSource(code,"code_fragment");
 		{
 			std::ofstream t(envSrcPath.c_str(),std::ios::out);
 			if (!t) {
@@ -121,6 +121,9 @@ struct SeparatedSrc {
 	String source;
 	String namespaces;
 };
+
+static StrViewA hashline("#line ");
+
 
 SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 
@@ -185,11 +188,25 @@ SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 		return ok;
 	};
 
+	auto appendLineMarker = [&](std::vector<char> &where) {
+		for (char c : hashline) where.push_back(c);
+		where.push_back(' ');
+		std::string sline = std::to_string(line);
+		for (char c : sline) where.push_back(c);
+		where.push_back(' ');
+		where.push_back('"');
+		for (char c: lineMarkerFile) where.push_back(c);;
+		where.push_back('"');
+		where.push_back('\r');
+		where.push_back('\n');
+	};
+
 	int c;
 	while ((c = getNext()) != -1) {
 		if (isspace(c)) {
 			includes.push_back((char)c);
 		} else if (c == '#') {
+			appendLineMarker(includes);
 			includes.push_back((char)c);
 			copyLineEx(includes);
 		}
@@ -203,6 +220,7 @@ SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 			includes.push_back((char)c);
 			copyLineEx(libs);
 		} else if (checkKw(c,"using namespace ",true)) {
+			appendLineMarker(namespaces);
 			namespaces.push_back((char)c);
 			copyLineEx(namespaces);
 		} else {
@@ -216,11 +234,9 @@ SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 	s.headers = StrViewA(includes.data(), includes.size());
 	s.libs = StrViewA(libs.data(),libs.size());
 	s.namespaces = StrViewA(namespaces.data(),namespaces.size());
-	if (lineMarkerFile.empty()) {
-		s.source = src.substr(pos);
-	} else {
-		s.source = {"#line ",Value(line).toString(), " \"", lineMarkerFile,"\"\n",src.substr(pos) };
-	}
+	includes.clear();
+	appendLineMarker(includes);
+	s.source = {StrViewA(includes.data(),includes.size()),src.substr(pos) };
 	return s;
 }
 
@@ -338,8 +354,9 @@ int ModuleCompiler::tryCompile(String file) {
 	}();
 
 	SourceInfo src = createSource(s,file);
-	String tmpSrc ({file,"-tmp.cpp"});
-	String tmpObj ({file,"-tmp.so"});
+	Value baseName(getpid());
+	String tmpSrc ({baseName.toString(),"-tmp.cpp"});
+	String tmpObj ({baseName.toString(),"-tmp.so"});
 
 	{
 		std::ofstream t(tmpSrc.c_str(),std::ios::out);

@@ -1,11 +1,118 @@
+#ifndef COUCHCPP_COMMON_HEADER
+#define COUCHCPP_COMMON_HEADER
+
+#pragma once
+
 #include <functional>
 #include <imtjson/json.h>
 
 using namespace json;
 
+#define INTERFACE_VERSION "1.0.3"
 
-#define INTERFACE_VERSION "1.0.2"
+namespace {
 
+
+
+typedef json::Value Document;
+typedef json::Value Key;
+
+
+struct ContextData {
+	Document prevDoc;
+	Value user;
+	Value security;
+
+	ContextData(Document prevDoc,Value user,Value security):prevDoc(prevDoc),user(user),security(security) {}
+};
+
+
+class Row {
+public:
+	Key key;
+	Value value;
+	StrViewA docId;
+
+	Row(Value row):key(row[0][0]),value(row[1]),docId(row[0][1].getString()) {}
+};
+
+class ListRow: public Value {
+public:
+	ListRow():json::Value(nullptr) {}
+	ListRow(const Value &v):json::Value(v) {}
+
+	Value getKey() const {return Value::operator[]("key");}
+	Value getValue() const {return Value::operator[]("value");}
+	Value getID() const {return Value::operator[]("id");}
+	Document getDoc() const {return Value::operator[]("doc");}
+
+	operator bool() const {return !isNull();}
+	bool operator!() const {return isNull();}
+};
+
+
+class RowIterator: public ValueIterator {
+public:
+	RowIterator(const ValueIterator &iter):ValueIterator(iter) {}
+
+	Row operator *() const {return Row(ValueIterator::operator *());}
+
+	typedef Row value_type;
+	typedef Row *        pointer;
+	typedef Row &        reference;
+	typedef std::intptr_t  difference_type;
+};
+
+class RowSet: public Value {
+public:
+
+	RowSet(Value v):Value(v) {}
+	Row operator[](int pos) const {return Row(Value::operator[](pos));}
+	RowIterator begin() const {return RowIterator(Value::begin());}
+	RowIterator end() const {return RowIterator(Value::end());}
+
+};
+
+class Error: public std::exception {
+public:
+	Error(String type, String desc):type(type),desc(desc) {}
+
+	String type;
+	String desc;
+
+	const char *what() const throw() {return type.c_str();}
+	virtual ~Error() throw() {}
+
+};
+
+
+class NotFound: public Error {
+public:
+	NotFound(String what):Error("not_found", what) {}
+};
+
+
+enum ValidationDecree {
+	accepted,
+	rejected,
+	forbidden,
+	unauthorized
+};
+
+class ValidationResult {
+public:
+	ValidationResult(bool res):decree(res?accepted:rejected) {}
+	ValidationResult(ValidationDecree decree):decree(decree) {}
+	ValidationResult(ValidationDecree decree, String description):decree(decree),description(description) {}
+
+	ValidationDecree decree;
+	String description;
+};
+
+
+typedef const ContextData &Context;
+
+}
 
 class IProc {
 public:
@@ -16,91 +123,12 @@ public:
 	typedef std::function<void(const StrViewA &)> SendFn;
 	typedef std::function<void(const Value &)> StartFn;
 
-	struct ContextData {
-		Value prevDoc;
-		Value user;
-		Value security;
-
-		ContextData(Value prevDoc,Value user,Value security):prevDoc(prevDoc),user(user),security(security) {}
-	};
-
-
-
-	class Row {
-	public:
-		Value key;
-		Value value;
-		Value docId;
-
-		Row(Value row):key(row[0][0]),value(row[1]),docId(row[0][1]) {}
-
-	};
-
-	class RowIterator: public ValueIterator {
-	public:
-		RowIterator(const ValueIterator &iter):ValueIterator(iter) {}
-
-		Row operator *() const {return Row(ValueIterator::operator *());}
-
-	    typedef Row value_type;
-	    typedef Row *        pointer;
-	    typedef Row &        reference;
-	    typedef std::intptr_t  difference_type;
-	};
-
-	class RowSet: public Value {
-	public:
-
-		RowSet(Value v):Value(v) {}
-		Row operator[](int pos) const {return Row(Value::operator[](pos));}
-		RowIterator begin() const {return RowIterator(Value::begin());}
-		RowIterator end() const {return RowIterator(Value::end());}
-
-	};
-
-	class Error: public std::exception {
-	public:
-		Error(String type, String desc):type(type),desc(desc) {}
-
-		String type;
-		String desc;
-
-		const char *what() const throw() {return type.c_str();}
-		virtual ~Error() throw() {}
-
-	};
-
-	class NotFound: public Error {
-	public:
-		NotFound(String what):Error("not_found", what) {}
-	};
-
-
-	enum ValidationDecree {
-		accepted,
-		rejected,
-		forbidden,
-		unauthorized
-	};
-
-	class ValidationResult {
-	public:
-		ValidationResult(bool res):decree(res?accepted:rejected) {}
-		ValidationResult(ValidationDecree decree):decree(decree) {}
-		ValidationResult(ValidationDecree decree, String description):decree(decree),description(description) {}
-
-		ValidationDecree decree;
-		String description;
-	};
-
-
-	typedef const ContextData &Context;
 
 	///Map document to the view
 	/**
 	 * @param doc document to map. To perform mapping, call emit(key,value) inside of the function
 	 */
-	virtual void mapdoc(Value doc) = 0;
+	virtual void mapdoc(Document doc) = 0;
 	///Reduce multiple documents
 	/**
 	 *
@@ -129,7 +157,7 @@ public:
 	 * The function send() sends the content to the client. If called before start() the function start with
 	 * a default settings is executed the first
 	 */
-	virtual void show(Value doc, Value request) = 0;
+	virtual void show(Document doc, Value request) = 0;
 	///List function (format content of view)
 	/**
 	 *
@@ -155,7 +183,7 @@ public:
 	 * are used.
 	 *
 	 */
-	virtual void update(Value &doc, Value request) = 0;
+	virtual void update(Document &doc, Value request) = 0;
 
 	///Filter function
 	/**
@@ -165,7 +193,7 @@ public:
 	 * @retval true use this document
 	 * @retval false skip this document
 	 */
-	virtual bool filter(Value doc, Value request) = 0;
+	virtual bool filter(Document doc, Value request) = 0;
 
 	///Validation function
 	/**
@@ -178,7 +206,7 @@ public:
 	 * Once an error reporting function is called, the validation fails right after the function returns. If none
 	 * of error reporting function is called, validation passes.
 	 */
-	virtual ValidationResult validate(Value doc, Context context) = 0;
+	virtual ValidationResult validate(Document doc, Context context) = 0;
 
 	virtual void onClose() = 0;
 
@@ -191,7 +219,6 @@ public:
 };
 
 class AbstractProc: public IProc {
-public:
 
 	///Function emit
 	/** The function is available only for mapdoc function
@@ -206,7 +233,7 @@ public:
 	 * The value undefined is converted to null
 	 *
 	 */
-	EmitFn emit;
+	EmitFn fn_emit;
 
 	///Function log
 	/**
@@ -218,7 +245,7 @@ public:
 	 *
 	 * Sends text to couchdb's log. Whole line must be send (it cannot be send per-partes)
 	 */
-	LogFn log;
+	LogFn fn_log;
 
 	///Function getRow
 	/**
@@ -234,7 +261,7 @@ public:
 	 *
 	 * @return Function returns next row, or null, if there are no more rows
 	 */
-	GetRowFn getRow;
+	GetRowFn fn_getRow;
 
 	///Function initiates output and sets parameters for the output - for instance: http headers
 	/**
@@ -248,7 +275,7 @@ public:
 	 * It can be also called many time before the first getRow causing, that settings from the last
 	 * call is applied.
 	 */
-	StartFn start;
+	StartFn fn_start;
 
 	///Function sends text to the output
 	/**
@@ -260,10 +287,106 @@ public:
 	 *
 	 * @param text text send to the output. */
 
-	SendFn send;
+	SendFn fn_send;
 
 
-	virtual void mapdoc(Value ) override{
+	Array rowBuffer;
+
+public:
+
+
+	///Write key-value pair to the current view
+	/**
+	 * @param key  key
+	 * @param value value
+	 *
+	 * @note function is available only in mapdoc() function
+	 */
+	inline void emit(const Key &key, const Value &value) {fn_emit(key,value);}
+	///Write key without value to the current view
+	/**
+	 * @param key  key
+	 *
+	 * @note function is available only in mapdoc() function
+	 */
+	inline void emit(const Key &key) {fn_emit(key,nullptr);}
+	///Write document to the current view
+	/**
+	 * @note function is available only in mapdoc() function
+	 */
+	inline void emit() {fn_emit(nullptr,nullptr);}
+
+	///Send text to the log
+	/**
+	 * @param msg message which appears in log
+	 */
+	inline void log(StrViewA msg) {fn_log(msg);}
+	///Send message and object to the log
+	/**
+	 * @param msg message which appears in log
+	 * @param data object which appears in log
+	 */
+	inline void log(StrViewA msg, json::Value data) {fn_log(String({msg,data.toString()}));}
+
+	///Receive next row from the current rowset
+	/**
+	 * @return Next row in the list. You can use operator ! to test end of list
+	 *
+	 * @code
+	 * ListRow rw;
+	 * while (rw = getRow()) {
+	 *
+	 * }
+	 * @endcode
+	 *
+	 * @note the function is available only in list() function
+	 *
+	 *
+	 */
+	inline ListRow getRow() {return fn_getRow();}
+
+
+
+	///Fetchs and maps multiple rows into an array
+	/**
+	 *
+	 * @param fn function which defines mapping
+	 * @param maxRows maximum count of rows to fetch and map
+	 * @return array contains mapped rows. If array is empty, no more rows are available
+	 */
+	template<typename Fn>
+ 	inline Value mapRows(Fn fn, std::size_t maxRows =(std::size_t)-1) {
+		rowBuffer.clear();
+		ListRow rw;
+		while (maxRows && (rw = getRow())) {
+			rowBuffer.push_back(fn(rw));
+		}
+		return rowBuffer;
+	}
+
+	///Initializes output
+	/**
+	 * @param headers headers as object key-value
+	 * @param code status code;
+	 */
+	inline void start(json::Value headers, int code = 200) {
+		fn_start(Object("code",code)("headers",headers));
+	}
+	///Send text to the output
+	/**
+	 * @param str text to send
+	 */
+	inline void send(StrViewA str) {fn_send(str);}
+	///Send json to the outpur
+	/**
+	 *
+	 * @param json json to send
+	 */
+	inline void sendJSON(const json::Value json) {fn_send(json.stringify());}
+
+
+
+	virtual void mapdoc(Document ) override{
 		throw std::runtime_error("Function 'void mapdoc(Value)' is not defined");
 	}
 	virtual Value reduce(RowSet rows) override {
@@ -272,22 +395,20 @@ public:
 	virtual Value rereduce(Value ) override {
 		throw std::runtime_error("Function 'Value rereduce(Value)' is not defined");
 	}
-	virtual Value reduce(Value , Value , bool )  {
-	}
 
-	virtual void show(Value , Value ) {
+	virtual void show(Document , Value ) override{
 		throw std::runtime_error("Function 'void show(Value doc, Value request)' is not defined");
 	}
-	virtual void list(Value , Value ) {
+	virtual void list(Value , Value ) override{
 		throw std::runtime_error("Function 'void list(Value head, Value request)' is not defined");
 	}
-	virtual void update(Value &, Value ) {
+	virtual void update(Document &, Value ) override{
 		throw std::runtime_error("Function 'void update(Value &doc, Value request)' is not defined");
 	}
-	virtual bool filter(Value , Value ) {
+	virtual bool filter(Document , Value ) override{
 		throw std::runtime_error("Function 'bool filter(Value doc, Value request)' is not defined");
 	}
-	virtual ValidationResult validate(Value , Context ) {
+	virtual ValidationResult validate(Document , Context )override {
 		throw std::runtime_error("Function 'ValidationResult validate(Value doc, Context context)' is not defined");
 	};
 
@@ -295,15 +416,16 @@ public:
 	virtual void onClose()override {delete this;}
 
 
-	virtual void initEmit(EmitFn fn) {emit = fn;}
-	virtual void initLog(LogFn fn) {log = fn;}
+	virtual void initEmit(EmitFn fn) {fn_emit = fn;}
+	virtual void initLog(LogFn fn) {fn_log = fn;}
 	virtual void initShowListFns(GetRowFn getrow, SendFn send, StartFn start) {
-		this->getRow = getrow;
-		this->send = send;
-		this->start = start;
+		this->fn_getRow = getrow;
+		this->fn_send = send;
+		this->fn_start = start;
 	}
 };
 
 
 
 
+#endif

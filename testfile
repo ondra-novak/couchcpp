@@ -1,5 +1,5 @@
 ["reset"]
-["add_fun","#include <cstdlib>\n#define LongDef \\\r\nContinues Here\n\nusing namespace std;\n\nvoid mapdoc(Value doc) override {emit(doc[\"_id\"], doc);}"]
+["add_fun","#include <cstdlib>\n#define LongDef \\\r\nContinues Here\n\nusing namespace std;\n\nvoid mapdoc(Document doc) override {emit(doc[\"_id\"], doc);}"]
 ["map_doc",{"_id":"123"}]
 ["map_doc",{"_id":"455","payload":"hello world"}]
 ["reduce",["Value reduce(RowSet rows) override {float x = 0;for (auto z:rows) { x += z.value.getNumber();} return x;}"],[[["a","a"],10],[["b","b"],20],[["c","c"],30]]]
@@ -12,11 +12,11 @@
 ["ddoc","new","_design/test",{
         "_id":"_design/test",
         "language":"C++",
-        "validate_doc_update":"ValidationResult validate(Value doc, Context context) {
-            log(doc.toString());
-            log(context.prevDoc.toString());
-            log(context.user.toString());
-            log(context.security.toString());        
+        "validate_doc_update":"ValidationResult validate(Document doc, Context context) {
+            log(\"doc: \",doc);
+            log(\"prevDoc: \",context.prevDoc);
+            log(\"user: \",context.user);
+            log(\"security: \",context.security);        
             return unauthorized;}"
     }]
 [
@@ -45,12 +45,12 @@
     ]
 ]
 ["reset"]
-["add_fun","void mapdoc(Value doc) override {throw Error(\"Snap\",\"This doesn't work\");}"]
+["add_fun","void mapdoc(Document doc) override {throw Error(\"Snap\",\"This doesn't work\");}"]
 ["map_doc",{"_id":"123"}]
 ["ddoc","new","_design/test",{
         "_id":"_design/test",
         "language":"C++",
-        "shows":{"test":"void show(Value doc, Value req) {
+        "shows":{"test":"void show(Document doc, Value req) {
             start(Object(\"headers\",Object(\"Content-Type\",\"text/plain\")));
             send(String({\"Hello \", String(doc[\"_id\"]), \"!\"}));
            }"
@@ -59,7 +59,7 @@
 ["ddoc","new","_design/test",{
         "_id":"_design/test",
         "language":"C++",
-        "updates":{"test":"void update(Value &doc, Value req) {
+        "updates":{"test":"void update(Document &doc, Value req) {
             start(Object(\"headers\",Object(\"Content-Type\",\"text/plain\")));
             send(\"Hello \");
             send(doc[\"_id\"].getString());
@@ -92,5 +92,5 @@
 ["list_end"]
 ["reset"]
 ["add_lib",{"aaa":{"bbb":"template <typename LogFn> void hello(LogFn log) { log(\"Hello world\");}"}}]
-["add_fun","#include \"aaa/bbb\"\n\nvoid mapdoc(Value doc) override { hello(log);}"]
+["add_fun","#include \"aaa/bbb\"\n\nvoid mapdoc(Document doc) override {auto mylog=[&](StrViewA msg){log(msg);}; hello(mylog);}"]
 ["map_doc",{"_id":"123"}]
