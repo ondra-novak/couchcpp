@@ -188,7 +188,7 @@ var doCommandDDocShow(IProc &proc, Value args) {
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value request = args[1];
-	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
+	proc.initShowListFns([&]() -> ListRow { return Value(nullptr);},
 			[](const StrViewA &v) {buff.push_back(v);},
 	         [&](const Value &resp) {respObj = resp;});
 	proc.show(doc,request);
@@ -198,14 +198,14 @@ var doCommandDDocShow(IProc &proc, Value args) {
 var doCommandDDocUpdates(IProc &proc, Value args) {
 	buff.clear();
 	Value respObj(json::object);
-	Value doc = args[0];
-	Value newdoc = doc;
+	Document doc = args[0];
+	Document newdoc = doc;
 	Value request = args[1];
-	proc.initShowListFns([&]{Value r = doc; doc = nullptr; return r;},
+	proc.initShowListFns([&] () -> ListRow { return Value(nullptr);},
 			[](const StrViewA &v) {buff.push_back(v);},
 			[&](const Value &resp) {respObj = resp;});
 	proc.update(newdoc,request);
-	if (newdoc.isCopyOf(doc)) newdoc = nullptr;
+	if (newdoc.isCopyOf(doc)) newdoc = Value( nullptr);
 	return {"up",newdoc,respObj.replace(Path::root/"body",buff.str())};
 }
 

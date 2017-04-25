@@ -4,8 +4,7 @@ Write your views in C++!
 
 ## Project status
 
-Query Server allows to write map and reduce functions in C++. 
-It uses the library "imtjson" to work with documents and other json values 
+Full query server. It supports: map, reduce, rereduce, show, list, update, validation and filter (and filter through the view)
 
 ## General rules 
 
@@ -19,63 +18,90 @@ The namespace "json" is always available as well as all functions from the "imtj
 
 using namespace std;
 
-void mapdoc(Value document) {
+void mapdoc(Document document) {
    emit(document["_id"], document["_rev"]);
 }
 ```
 
 
-## map function
+## API
 
-The map function must be declared as **void mapdoc(Value document)**. To emit the
-key-value pair, you can use function **void emit(Value key, Value value);**
+The full description of the API is provided by couchcpp/parts/common.h There are a lot of types and functions. The script generally
+defines implementation of methods from the class AbstractProc.
 
-
-```
-void mapdoc(Value document) {
-   emit(document["_id"], document["_rev"]);
-}
-```
-
-## reduce function
-
-Reduce function can be used in two forms
-
-### javascript style
+### handlers
 
 ```
-Value reduce(Value keys, Value values, bool rereduce);
-```
-
-### split style
-
-```
-Value reduce(Value keys, Value values);
-Value rereduce( values);
-```
-
-## debugging
-
-Functions are hard to debug. However you can use simple logging feature through the
-CouchDB's logfile
+void mapdoc(Document doc);
+Value reduce(RowSet rows);
+Value rereduce(Value values);
+void show(Document doc, Value req);
+void list(Value head, Value req);
+void update(Document &doc, Value req);
+bool filter(Document doc, Value req);
+ValidationResult validate(Document doc, Context context);
 
 ```
-void log(StrViewA text)
-```
+
+### API functions
+
+The script can use following API functions
+
+ - **emit**: emit(key,value), emit(key), emit() - function is available in the script **mapdoc()** only
+ - **log**: log(text), log(text, value) - sends message to the logfile
+ - **getRow**: ListRow row = getRow() - receives next row from the view.  The function is available in the script **list()**
+ - **mapRows**: Value rows = mapRows(fn, count) - maps rows to JSON-array through the function.  The function is available in the script **list()**
+ - **start**: start(Value headers, int code=200) -  The function is available in the script **list()**,**show()**,**update()**
+-  **send**: send(text) -  The function is available in the script **list()**,**show()**,**update()**
+-  **sendJSON**: sendJSON(Value) -  The function is available in the script **list()**,**show()**,**update()**
+
+### Types and Objects
+
+ * all objects from **imtjson** library
+ * **Document** - improved json::Value
+ * **Key** - json::Value used as key
+ * **Context** - validation context, contains document's previous revision, user context and security object
+ * **Row** - A single row for reduce () contains key, value and docId
+ * **RowIterator** - iterator through rows for the function reduce()
+ * **RowSet** - set of rows to reduce
+ * **ListRow** - A single row returned by getRow() exposes function to access at key, value, id a and document itself (when include_docs is active)
+ * **ValidationResult** - result of validation
+ * **Error** - error exception
+ * **NotFound** -  not_found exception
+
+ 
 
 ## custom libraries
 
 To use custom libraries, you need to include special line at the beginning of 
-the begging of the code snippet: "libs"
+the begging of the code snippet: "//!link" - contains instructions for linker
 
 ```
-#libs -lssl -lcrypto
+//!link -lssl -lcrypto
 #include <openssl/sha.h>
 
-void mapdoc(Value document) {
+void mapdoc(Document document) {
 ...
 }
 ```
+
+## shared code
+
+There can be shared code for every script in context of single design document without reduce and rereduce functions.
+You can put shared code to the section "views/lib". Each key there is assumed as file, which can be included into the script
+
+```
+{
+   "views": {
+           "lib": {
+                "consts.h":"const float pi = 3.14159265;\n"
+	   },
+           "whatever":{
+                 "map":"#include \"consts.h\"\n\nvoid mapdoc(Document doc) { ..."
+            }
+}
+```
+(NOTE, shared code doesn't work in CouchDB 2.0 because issue "COUCHDB-3388")
 
 ## instalation
 
@@ -121,9 +147,6 @@ Now the language C++ should be available in the Futon
  * **compiler/libs** - libraries and other options placed after the source file. 
  
   
-# Limitations
-
- * Currently, only map and reduce functions are supported.
  
 # Security
 
@@ -135,6 +158,12 @@ Now the language C++ should be available in the Futon
   4. set suid-bit on couchcpp
   5. restart CouchDB
   
-  
+# Practical advices
+
+ - use couchapp to manage your scripts
+ - couchcpp supports option "-c" that allows to check syntax of your code snippets. Use it in your makefiles, or as an hook of couchapp. Also see couchcpp -h
+ - the cache can grow faster during development, clean it time to tome. However, this should not be an issue in the production because scripts are not
+modified often
+
 
 

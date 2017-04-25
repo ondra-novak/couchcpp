@@ -8,13 +8,95 @@
 
 using namespace json;
 
-#define INTERFACE_VERSION "1.0.3"
+#define INTERFACE_VERSION "1.0.4"
 
 namespace {
 
 
 
-typedef json::Value Document;
+class Document: public json::Value {
+public:
+	Document(const json::Value &x):json::Value(x) {}
+
+	///Retrieve document id as string
+	StrViewA getID() const {return (*this)["_id"].getString();}
+	///Retrieve document type
+	/**
+	 * Document type is defined as prefix, which is separated by special character.
+	 * For example: for "user.123484ewa15d8" document type is "user". Default separator is '.', however
+	 * you can specify different separator as argument.
+	 *
+	 * @param typeSep separator between type and rest of id
+	 * @return document type. if separator missing, returns empty string
+	 */
+	StrViewA getDocType(char typeSep = '.') const {
+		StrViewA id = getID();
+		std::size_t seppos = id.indexOf(StrViewA(&typeSep,1));
+		if (seppos == id.npos) return StrViewA();
+		else return id.substr(0,seppos);
+	}
+
+	///Replaces value in the document specified by the path. Returns updated document
+	/**
+	 * @param path path
+	 * @param val new value
+	 * @return updated document
+	 *
+	 * @note for multiple changes, it is better to use json::Object
+	 */
+	Document replace(const Path &path, const json::Value &val) const {
+		return Document(json::Value::replace(path,val));
+	}
+	///Replaces value in the document specified by the a key (at first level). Returns updated document
+	/**
+	 * @param key to replace
+	 * @param val new value
+	 * @return updated document
+	 *
+	 * @note for multiple changes, it is better to use json::Object
+	 */
+	Document replace(const StrViewA &key, const json::Value &val) const {
+		return Document(json::Value::replace(json::Path::root/key,val));
+	}
+
+	///Retrieve metadata about specified attachment
+	Value getAttachment(StrViewA name) const {
+		return getAttachments()[name];
+	}
+	///Retrieves container of attachments for enumerations
+	Value getAttachments() const {
+		return (*this)["_attachments"];
+	}
+	///calculates uru (relative to database root) for specified attachment
+	String getAttachmentUri(StrViewA name, Value userContext) const {
+		Value db = userContext["db"];
+		if (!db.defined()) {
+			db = userContext["userCtx"]["db"];
+		}
+		if (!db.defined()) {
+			throw std::runtime_error("getAttachmentUri - invalid 2. argument");
+		}
+		Value idenc = urlEncoding->encodeBinaryValue(BinaryView(getID()));
+		Value nameenc = urlEncoding->encodeBinaryValue(BinaryView(name));
+		return String({db.getString(),"/",idenc,"/",nameenc});
+	}
+	///Sets attachment
+	/**
+	 * @param name name of attachment
+	 * @param data metadata, which may include a data field with base64 content. This argument
+	 * can be also undefined to delete attachment
+	 * @return new document
+	 *
+	 * @note function replaces existing attachment.
+	 */
+	Document setAttachment(StrViewA name, Value data) {
+		return replace(Path::root/"_attachments"/name, data);
+	}
+
+};
+
+
+
 typedef json::Value Key;
 
 ///Contains context of the validation
@@ -445,7 +527,7 @@ public:
 
 
 	virtual void mapdoc(Document ) override{
-		throw std::runtime_error("Function 'void mapdoc(Value)' is not defined");
+		throw std::runtime_error("Function 'void mapdoc(Document)' is not defined");
 	}
 	virtual Value reduce(RowSet rows) override {
 		throw std::runtime_error("Function 'Value reduce(RowSet rows)' is not defined");
@@ -455,19 +537,19 @@ public:
 	}
 
 	virtual void show(Document , Value ) override{
-		throw std::runtime_error("Function 'void show(Value doc, Value request)' is not defined");
+		throw std::runtime_error("Function 'void show(Document doc, Value request)' is not defined");
 	}
 	virtual void list(Value , Value ) override{
 		throw std::runtime_error("Function 'void list(Value head, Value request)' is not defined");
 	}
 	virtual void update(Document &, Value ) override{
-		throw std::runtime_error("Function 'void update(Value &doc, Value request)' is not defined");
+		throw std::runtime_error("Function 'void update(Document &doc, Value request)' is not defined");
 	}
 	virtual bool filter(Document , Value ) override{
-		throw std::runtime_error("Function 'bool filter(Value doc, Value request)' is not defined");
+		throw std::runtime_error("Function 'bool filter(Document doc, Value request)' is not defined");
 	}
 	virtual ValidationResult validate(Document , Context )override {
-		throw std::runtime_error("Function 'ValidationResult validate(Value doc, Context context)' is not defined");
+		throw std::runtime_error("Function 'ValidationResult validate(Document doc, Context context)' is not defined");
 	};
 
 
