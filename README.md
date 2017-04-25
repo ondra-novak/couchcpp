@@ -8,6 +8,18 @@ Write your views in C++!
 
 Full query server. It supports: map, reduce, rereduce, show, list, update, validation and filter (and filter through the view)
 
+Supported software: 
+ * CouchDB 1.6.x, 
+ * CouchDB 2.0+ (theoretically, not tested, shared code doesn't compile due bug)
+ * Linux (tested in Ubuntu)
+
+Required software:
+  
+ * CouchDB, 
+ * The library "imtjson"(https://github.com/ondra-novak/imtjson), 
+ * C++ compiler (G++ compatible) which supports C++11 (you need the compiler on the production server as well)
+ * CMake 2.8+  
+
 ## General rules 
 
 Function is written as pure text. You can use preprocesor and also include custom headers.
@@ -164,7 +176,7 @@ Now the language C++ should be available in the Futon
 
  - use couchapp to manage your scripts
  - couchcpp supports option "-c" that allows to check syntax of your code snippets. Use it in your makefiles, or as an hook of couchapp. Also see couchcpp -h
- - the cache can grow faster during development, clean it time to tome. However, this should not be an issue in the production because scripts are not
+ - the cache can grow faster during development, clean it sometimes. However, this should not be an issue in the production because scripts are not
 modified often
 
 
