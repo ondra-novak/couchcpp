@@ -2,6 +2,8 @@
 
 Write your views in C++!
 
+![Screenshot](screenshot.png?raw=true "Screenshot")
+
 ## Project status
 
 Full query server. It supports: map, reduce, rereduce, show, list, update, validation and filter (and filter through the view)
