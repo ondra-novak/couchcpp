@@ -164,13 +164,19 @@ Now the language C++ should be available in the Futon
  
 # Security
 
- - Running couchcpp under different user - this prevent to the user code to access couchdb's files. 
+ ## Running couchcpp under different user - this prevent to the user code to access couchdb's files. 
   
   1. create new user and group
   2. give /usr/local/bin/couchcpp to the new user and group (chown)
   3. give /var/cache/couchcpp to the new user and group
   4. set suid-bit on couchcpp
   5. restart CouchDB
+  
+ ## Prevent compilation on production
+  
+  **couchcpp** can theoretically run without the compiler if you popupate its cache with precompiled objects. However, any
+  modification into design documents requires to repopuplate the cache, otherwise the view regeneration fails 
+  making modified views unavailable.
   
 # Practical advices
 
