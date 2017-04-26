@@ -12,17 +12,18 @@
 #include <cstring>
 #include <fstream>
 #include <ftw.h>
+#include <signal.h>
 
 Module::Module(String path):path(path) {
 
 	libHandle = dlopen(path.c_str(),RTLD_NOW);
 	if (libHandle == nullptr)
-		throw std::runtime_error(String({"Cannot open assembly: ", path}).c_str());
+		throw std::runtime_error(String({"Cannot open module: ", path, " - ", strerror(errno)}).c_str());
 
 	EntryPoint e = (EntryPoint)dlsym(libHandle, "initProc");
 	if (e == nullptr) {
 		dlclose(libHandle);
-		throw std::runtime_error(String({"Assembly is corrupted: ", path}).c_str());
+		throw std::runtime_error(String({"Module is corrupted: ", path, " - ", strerror(errno)}).c_str());
 	}
 
 	proc = e();
@@ -248,8 +249,9 @@ ModuleCompiler::SourceInfo ModuleCompiler::createSource(StrViewA code, String li
 
 	SourceInfo srcinfo;
 	srcinfo.sourceCode = String({
+		"#define __COUCHCPP_COMPILER \"" INTERFACE_VERSION "\"\n",
+		"#include <couchcpp/parts/common.h>\n",
 		src.headers,
-		"#include <couchcpp/parts/common.h>\n"
 		"namespace {\n",
 		src.namespaces,
 		"class Proc: public AbstractProc {\n"
@@ -315,6 +317,8 @@ String ModuleCompiler::prepareEnv() const {
 
 	doAddLib(envPath, sharedCode);
 
+	logOut(String({"Environment prepared at: ", envPath}));
+
 	return envPath;
 }
 
@@ -333,6 +337,7 @@ void ModuleCompiler::dropEnv() {
 	if (envPath.empty()) return;
 
 	nftw(envPath.c_str(),&walkClear,20,FTW_DEPTH|FTW_PHYS|FTW_MOUNT);
+	logOut(String({"Environment dropped at: ", envPath}));
 	envPath = String();
 }
 
@@ -340,10 +345,10 @@ ModuleCompiler::~ModuleCompiler() {
 	dropEnv();
 }
 
-int ModuleCompiler::tryCompile(String file) {
+int ModuleCompiler::compileFromFile(String file, bool moveToCache) {
 	std::ifstream in(file.c_str(), std::ios::in);
 	if (!in) {
-		std::cerr << "Failed to open:" << file;
+		std::cerr << "Failed to open:" << file << std::endl;
 		return 1;
 	}
 
@@ -353,10 +358,21 @@ int ModuleCompiler::tryCompile(String file) {
 	  return ss.str();
 	}();
 
+	std::size_t hash = calcHash(s);
+
+
 	SourceInfo src = createSource(s,file);
 	Value baseName(getpid());
 	String tmpSrc ({baseName.toString(),"-tmp.cpp"});
-	String tmpObj ({baseName.toString(),"-tmp.so"});
+	String tmpObj ({"./",baseName.toString(),"-tmp.so"});
+	String strhash = hashToModuleName(hash);
+	String modulePath ({cachePath,"/",strhash,".so"});
+
+	if (moveToCache) {
+		if (access(modulePath.c_str(),F_OK) == 0) return 0;
+		else tmpObj = modulePath;
+	}
+
 
 	{
 		std::ofstream t(tmpSrc.c_str(),std::ios::out);
@@ -376,8 +392,55 @@ int ModuleCompiler::tryCompile(String file) {
 		" ",src.libraries,
 		" ",gccLibs});
 
+	logOut(cmdLine);
 	int res = system(cmdLine.c_str());
-	remove(tmpSrc.c_str());
-	remove(tmpObj.c_str());
+	if (res == 0) {
+		try {
+			Module testOpen(tmpObj);
+		} catch (...) {
+			unlink(tmpSrc.c_str());
+			throw std::runtime_error(String({"Failed to link module: ", file}).c_str());
+		}
+	}
+
+
+	if (!moveToCache) {
+		remove(tmpObj.c_str());
+	}
+	if (unlink(tmpSrc.c_str())) {
+		throw std::runtime_error(String({"Failed to remove file: ", tmpSrc, " - ", strerror(errno)}).c_str());
+
+	}
 	return res;
+}
+
+static int clearCacheWalk(const char *fname, const struct stat *, int type, struct FTW *ftw) {
+	if (ftw->level == 0) {
+		return FTW_CONTINUE;
+	} else if (type == FTW_D) {
+		long pid = strtol(fname,0,10);
+		if (pid) {
+			bool ok = kill(pid,0) == 0;
+			if (!ok && errno != ESRCH) ok = true;
+			if (!ok) {
+				logOut(String({"Removing no longer used environment: ", fname}));
+				nftw(fname,&walkClear,20,0);
+			}
+		}
+		return FTW_SKIP_SUBTREE;
+	} else {
+		StrViewA baseName(fname +ftw->base);
+		if (baseName.substr(0,4) == "mod_") {
+			logOut(String({"Removed cached module: ", fname}));
+			remove(fname);
+		}
+		return  FTW_CONTINUE;
+	}
+}
+
+void ModuleCompiler::clearCache() {
+	dropEnv();
+
+	nftw(cachePath.c_str(),&clearCacheWalk,20,FTW_ACTIONRETVAL);
+
 }

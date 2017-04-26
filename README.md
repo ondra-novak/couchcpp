@@ -10,7 +10,7 @@ Full query server. It supports: map, reduce, rereduce, show, list, update, valid
 
 Supported software: 
  * CouchDB 1.6.x, 
- * CouchDB 2.0+ (theoretically, not tested, shared code doesn't compile due bug)
+ * CouchDB 2.0+ (theoretically, not tested, shared code doesn't compile due a bug)
  * Linux (tested in Ubuntu)
 
 Required software:

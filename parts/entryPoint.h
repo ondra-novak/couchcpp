@@ -1,7 +1,7 @@
 
 
 extern "C" {
-	IProc *initProc() {
+__attribute__ ((visibility ("default"))) IProc *initProc() {
 		return new Proc;
 	}
 }

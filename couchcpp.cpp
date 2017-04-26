@@ -95,6 +95,7 @@ PModule compileFunction(ModuleCompiler& compiler, const StrViewA& cmd) {
 	return a;
 }
 
+
 var doAddFun(ModuleCompiler &compiler, const StrViewA &cmd) {
 	views.push_back(compileFunction(compiler,cmd));
 	return true;
@@ -353,6 +354,10 @@ int main(int argc, char **argv) {
 		String cwd = getcwd();
 		String cfgpath = "/etc/couchdb/couchcpp.conf";
 		String tryCompile;
+		String cacheOverride;
+		std::vector<String> populate;
+		bool clearcache = false;
+		bool needPopulate = false;
 
 
 
@@ -375,16 +380,35 @@ int main(int argc, char **argv) {
 				}
 			}
 			else if (a == "-h") {
-				std::cerr << argv[0] << " -f <config> [ -c <file> [ -l <dir>] ]" << std::endl;
+				std::cerr << argv[0] << " -f <config> [ -c <file> [ -l <dir>] ] [ -p <files...>][-c][-o <dir>]" << std::endl;
 				std::cerr << std::endl;
 				std::cerr << "-f\tSpecifies path to configuration file (mandatory)" << std::endl;
 				std::cerr << std::endl;
 				std::cerr << "-c\tOpens specified file and tries to compile function in it." << std::endl;
 				std::cerr << "\tIt doesn't generate module. In case that compiler fails, " << std::endl
 						  << "\ta report is send to standard error (and return value indicates error)" << std::endl;
-				std::cerr << "-l\tSpecify path to lib directory" << std::endl << std::endl;
+				std::cerr << "-l\tSpecify path to lib directory" << std::endl ;
+				std::cerr << "-p\tPopuplate the cache by compiling specified files" << std::endl ;
+				std::cerr << "-r\tClear cache"<< std::endl << std::endl;
+				std::cerr << "-o\tPut results to the specified directory (overrides configuration file)"<< std::endl << std::endl;
+
+
 				return 1;
 			}
+			else if (a == "-p") {
+				while (argp < argc && argv[argp][0] != '-') {
+					populate.push_back(relpath(cwd,argv[argp++]));
+				}
+				needPopulate = true;
+			}
+			else if (a == "-r") {
+				clearcache = true;
+			}
+			else if (a == "-o") {
+				if (argp >= argc) throw std::runtime_error("Missing argument after -o");
+				cacheOverride = relpath(cwd,argv[argp++]);
+			}
+
 		}
 
 		cfgpath = relpath(cwd, cfgpath);
@@ -405,12 +429,24 @@ int main(int argc, char **argv) {
 		String strlibs(x);
 
 		bool keepSources = cfg["keepSource"].getBool();
+		if (!cacheOverride.empty()) strcache = cacheOverride;
 
 
 		ModuleCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
 
+		if (clearcache) {
+			compiler.clearCache();
+		}
 		if (!tryCompile.empty()) {
-			return compiler.tryCompile(tryCompile);
+			return compiler.compileFromFile(tryCompile,false);
+		}
+		if (needPopulate) {
+			if (populate.empty()) {
+					std::cerr << "Nothing to populate" << std::endl;
+			} else {
+				for (auto s: populate) compiler.compileFromFile(s,true);
+			}
+			return 0;
 		}
 
 		logOut("MIT License - Copyright (c) 2017 Ondrej Novak");

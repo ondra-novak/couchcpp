@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 add_compile_options(-std=c++11)
 add_executable (couchcpp couchcpp.cpp module.cpp) 
-target_link_libraries (couchcpp LINK_PUBLIC imtjson dl)
+target_link_libraries (couchcpp LINK_PUBLIC imtjson dl -rdynamic)
 
 file(GLOB couchcpp_HDR "parts/*.h")
 
@@ -17,6 +17,9 @@ INSTALL(FILES couchcpp.conf
         
 INSTALL(FILES ${couchcpp_HDR}
         DESTINATION "include/couchcpp/parts"
+        )      
+INSTALL(FILES api.h
+        DESTINATION "include/couchcpp"
         )      
         
 INSTALL (CODE "execute_process(COMMAND mkdir -p /var/cache/couchcpp)")

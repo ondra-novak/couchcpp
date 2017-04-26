@@ -58,7 +58,8 @@ public:
 	String prepareEnv() const;
 	void dropEnv();
 
-	int tryCompile(String file);
+	int compileFromFile(String file, bool moveToCache);
+	void clearCache();
 
 protected:
 	String cachePath;
