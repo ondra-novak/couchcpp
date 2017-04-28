@@ -242,6 +242,11 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 			[&](const Value &resp) {respObj = resp;});
 
 	proc.list(head,request);
+	if (needstart) {
+		respObj = respObj.replace("stop",true);
+		stream.write({"start",Value(json::array,{buff.str()}),respObj});
+		Value r = stream.read();
+	}
 	return {"end",Value(json::array,{buff.str()})};
 }
 
@@ -472,7 +477,6 @@ int main(int argc, char **argv) {
 			}
 			return 0;
 		}
-
 
 		try {
 		while (!stream.isEof()) {
