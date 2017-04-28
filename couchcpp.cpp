@@ -176,6 +176,10 @@ public:
 		outbuffer.reserve(outbuffer.size()+txt.length);
 		for (auto c: txt) outbuffer.push_back(c);
 	}
+	Value getChunks() const {
+		if (outbuffer.empty()) return Value(json::array);
+		else return Value(json::array,{str()});
+	}
 
 protected:
 	std::vector<char> outbuffer;
@@ -222,10 +226,10 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 				if (isend) return nullptr;
 				Value s;
 				if (needstart) {
-					s = {"start",Value(json::array,{buff.str()}), respObj};
+					s = {"start",buff.getChunks(), respObj};
 					needstart = false;
 				} else {
-					s = {"chunks",Value(json::array,{buff.str()})};
+					s = {"chunks",buff.getChunks()};
 				}
 				buff.clear();
 				stream.write(s);
@@ -244,11 +248,11 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 	proc.list(head,request);
 	if (needstart) {
 		respObj = respObj.replace("stop",true);
-		stream.write({"start",Value(json::array,{buff.str()}),respObj});
+		stream.write({"start",buff.getChunks(),respObj});
 		Value r = stream.read();
 		buff.clear();
 	}
-	return {"end",Value(json::array,{buff.str()})};
+	return {"end",buff.getChunks()};
 }
 
 var doCommandDDocFilters(IProc &proc, Value args) {
