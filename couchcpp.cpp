@@ -288,6 +288,29 @@ var doCommandDDocValidate(IProc &proc, Value args) {
 	return 1;
 }
 
+void precompile(ModuleCompiler &compiler, Value doc) {
+
+	Value views = doc["views"];
+	Value shows = doc["shows"];
+	Value lists = doc["lists"];
+	Value updates = doc["updates"];
+	Value filters = doc["filters"];
+	Value validate = doc["validate_doc_update"];
+	Value lib = views["lib"];
+	compiler.setSharedCode(lib);
+
+	compileFunction(compiler, validate.getString());
+	for (auto v: lists) compileFunction(compiler, v.getString());
+	for (auto v: shows) compileFunction(compiler, v.getString());
+	for (auto v: updates) compileFunction(compiler, v.getString());
+	for (auto v: filters) compileFunction(compiler, v.getString());
+	for (auto v: views){
+		compileFunction(compiler, v["map"].getString());
+		Value r = v["reduce"];
+		if (r.getString().empty()) compileFunction(compiler, r.getString());
+	}
+}
+
 
 var doCommandDDoc(ModuleCompiler &compiler, const var &cmd, JSONStream &stream) {
 	String id (cmd[1]);
@@ -296,6 +319,7 @@ var doCommandDDoc(ModuleCompiler &compiler, const var &cmd, JSONStream &stream) 
 		var doc = cmd[3];
 		if (id.defined() && doc.defined()) {
 			storedDocs[id] = doc;
+			precompile(compiler, doc);
 			return true;
 		}
 		else return {"error","Internal error","Failed to update design document"};
@@ -449,9 +473,6 @@ int main(int argc, char **argv) {
 			return 0;
 		}
 
-		logOut("MIT License - Copyright (c) 2017 Ondrej Novak");
-		logOut("Project origin: https://github.com/ondra-novak/couchcpp");
-		logOut("Use -h for help");
 
 		try {
 		while (!stream.isEof()) {

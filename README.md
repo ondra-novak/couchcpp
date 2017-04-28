@@ -1,5 +1,7 @@
 # CouchCPP
 
+Please support this project: 1NpHFG9New924888REy2dGA4dTikm5DFa4
+
 Write your views in C++!
 
 ![Screenshot](screenshot.png?raw=true "Screenshot")
@@ -185,5 +187,5 @@ Now the language C++ should be available in the Futon
  - the cache can grow faster during development, clean it sometimes. However, this should not be an issue in the production because scripts are not
 modified often
 
-
+Please support this project: 1NpHFG9New924888REy2dGA4dTikm5DFa4
 
