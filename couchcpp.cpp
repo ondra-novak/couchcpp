@@ -246,6 +246,7 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 		respObj = respObj.replace("stop",true);
 		stream.write({"start",Value(json::array,{buff.str()}),respObj});
 		Value r = stream.read();
+		buff.clear();
 	}
 	return {"end",Value(json::array,{buff.str()})};
 }
