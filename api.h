@@ -16,13 +16,17 @@
 #include <functional>
 #include <imtjson/json.h>
 
-#define INTERFACE_VERSION "1.0.5"
+#define INTERFACE_VERSION "1.1.0"
 
 using namespace json;
 
 
 namespace {
 
+
+inline String encodeURIComponent(StrViewA component) {
+	return String(urlEncoding->encodeBinaryValue(BinaryView(component)));
+}
 
 
 class Document: public json::Value {
@@ -263,6 +267,20 @@ public:
 
 typedef const ContextData &Context;
 
+enum QueryViewOutput {
+	///For each key, return all matching rows
+	/** It put rows into array, even if there is only one row */
+	allRows,
+	///For each key, return all matching rows and associated documents
+	/** It put rows into array, even if there is only one row */
+	allRows_IncludeDocs,
+	///For each key, group rows into single row
+	/** It put one row for each key */
+	groupRows
+
+};
+
+
 
 #ifndef __COUCHCPP_COMPILER
 
@@ -347,6 +365,44 @@ void send(StrViewA str);
  */
 void sendJSON(const json::Value json);
 
+///Lookups for given documents
+/**
+ * This function allows to query other view. Function can be used during render functions, such
+ *   a list(), show(), update()
+ *
+ * @param docIds array of document IDs. Each item must be json::Value of string type.
+ * This allows to put json-Value directly from the source json without extracting and re-creating
+ * a string value
+ * @return returns array, which is 1:1 map to the arguments. For each item in arguments, there
+ * is item containing the document matching to corresponding document ID. If the document is
+ * not exists (deleted or not found), the null appear instead.
+ *
+ * @note The function is resource intensive and can degrade performance a lot if it is used
+ * more then few times during rendering the result. It is much faster to ask for multiple documents (it can
+ * handle a lot of documents at once!) then calling this function for each document separatedly.
+ */
+inline Array lookup(const Array &docIds);
+
+///Query other view.
+/**
+ * This function allows to query other view. Function can be used during render functions, such
+ *   a list(), show(), update() It is very limited, because it can query for keys only.
+ *   It doesn't support search for a range and groupLevel for reduce
+ *
+ * @param viewName name of the view in the current design document
+ * @param keys list of keys to query.
+ * @param outMode defines which result will be returned. For allRows or allRows_includeDocs,
+ *  there will be array for every matching key from the argument keys. Non-matching keys
+ *  have there null. The array can contain one or multiple rows depending on, how many rows matches.
+ *  For the groupRows, the reduce is used to group rows into one. For every key there is
+ *  directly the grouped row (no array)
+ * * @return List of found rows for each key.
+ *
+ * @note The function is always search in current version of the view (stalled version). It is possible
+ * to receive an old data in case that view has not been recently updated. If you want to use this
+ * feature, you need to keep the views updated.
+ */
+inline Array queryView(StrViewA viewName, const Array &keys, QueryViewOutput outMode = allRows);
 
 
 #endif

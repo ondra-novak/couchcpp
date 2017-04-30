@@ -27,21 +27,20 @@ Module::Module(String path):path(path) {
 	}
 
 	proc = e();
-	logOut(String({"load: ", path}));
 }
 
 Module::~Module() {
 	proc->onClose();
 	dlclose(libHandle);
-	logOut(String({"unload: ", path}));
 }
 
-ModuleCompiler::ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource)
+ModuleCompiler::ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource, LogOutFn fn)
 	:cachePath(cachePath)
 	,gccPath(gccPath)
 	,gccOpts(gccOpts)
 	,gccLibs(gccLibs)
 	,keepSource(keepSource)
+	,logOutFn(fn)
 {
 
 }
@@ -55,6 +54,14 @@ String hashToModuleName(std::size_t sz) {
 		c+=str.length;
 	});
 	return String({"mod_",StrViewA(buff, c- buff)});
+}
+
+
+bool ModuleCompiler::isCompiled(StrViewA code) const {
+	std::size_t hash = calcHash(code);
+	String strhash = hashToModuleName(hash);
+	String modulePath ({cachePath,"/",strhash,".so"});
+	return access(modulePath.c_str(), F_OK) == 0;
 }
 
 PModule ModuleCompiler::compile(StrViewA code) const {
@@ -91,7 +98,7 @@ PModule ModuleCompiler::compile(StrViewA code) const {
 			" ",gccLibs,
 			" 2>&1"});
 
-		logOut(String({"compile: ", cmdLine}));
+		logOutFn(String({"compile: ", cmdLine}));
 
 
 		FILE *f = popen(cmdLine.c_str(), "r");
@@ -280,7 +287,7 @@ void ModuleCompiler::setSharedCode(Value sharedCode) {
 	}
 }
 
-static void doAddLib(String cachePath, Value lib) {
+void ModuleCompiler::doAddLib(String cachePath, Value lib) const {
 
 	//logOut(lib.toString());
 	for (Value x : lib) {
@@ -297,12 +304,12 @@ static void doAddLib(String cachePath, Value lib) {
 					throw std::runtime_error(String({"Unable to write to file:", path}).c_str());
 				}
 				outf.write(content.data, content.length);
-				logOut(String({"Imported: ", path}));
+				logOutFn(String({"Imported: ", path}));
 			} else {
-				logOut(String({"Warning: Can't import :",x.toString()}));
+				logOutFn(String({"Warning: Can't import :",x.toString()}));
 			}
 		} else {
-			logOut(String({"Skipping an empty key for: ", lib.toString()}));
+			logOutFn(String({"Skipping an empty key for: ", lib.toString()}));
 		}
 	}
 }
@@ -317,7 +324,7 @@ String ModuleCompiler::prepareEnv() const {
 
 	doAddLib(envPath, sharedCode);
 
-	logOut(String({"Environment prepared at: ", envPath}));
+	logOutFn(String({"Environment prepared at: ", envPath}));
 
 	return envPath;
 }
@@ -337,7 +344,7 @@ void ModuleCompiler::dropEnv() {
 	if (envPath.empty()) return;
 
 	nftw(envPath.c_str(),&walkClear,20,FTW_DEPTH|FTW_PHYS|FTW_MOUNT);
-	logOut(String({"Environment dropped at: ", envPath}));
+	logOutFn(String({"Environment dropped at: ", envPath}));
 	envPath = String();
 }
 
@@ -392,7 +399,7 @@ int ModuleCompiler::compileFromFile(String file, bool moveToCache) {
 		" ",src.libraries,
 		" ",gccLibs});
 
-	logOut(cmdLine);
+	logOutFn(cmdLine);
 	int res = system(cmdLine.c_str());
 	if (res == 0) {
 		try {
@@ -423,7 +430,6 @@ static int clearCacheWalk(const char *fname, const struct stat *, int type, stru
 			bool ok = kill(pid,0) == 0;
 			if (!ok && errno != ESRCH) ok = true;
 			if (!ok) {
-				logOut(String({"Removing no longer used environment: ", fname}));
 				nftw(fname,&walkClear,20,0);
 			}
 		}
@@ -431,7 +437,6 @@ static int clearCacheWalk(const char *fname, const struct stat *, int type, stru
 	} else {
 		StrViewA baseName(fname +ftw->base);
 		if (baseName.substr(0,4) == "mod_") {
-			logOut(String({"Removed cached module: ", fname}));
 			remove(fname);
 		}
 		return  FTW_CONTINUE;
@@ -443,4 +448,10 @@ void ModuleCompiler::clearCache() {
 
 	nftw(cachePath.c_str(),&clearCacheWalk,20,FTW_ACTIONRETVAL);
 
+}
+
+ModuleCompiler::LogOutFn ModuleCompiler::setLogOutFn(LogOutFn fn) {
+	LogOutFn x = this->logOutFn;
+	this->logOutFn = fn;
+	return x;
 }

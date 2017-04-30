@@ -28,10 +28,11 @@ protected:
 
 typedef RefCntPtr<Module> PModule;
 
-void logOut(const StrViewA & msg);
 
 class ModuleCompiler {
 public:
+
+	typedef std::function<void(StrViewA)> LogOutFn;
 
 	struct SourceInfo {
 		///Complete source ready to compile
@@ -42,10 +43,11 @@ public:
 
 	};
 
-	ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource);
+	ModuleCompiler(String cachePath, String gccPath, String gccOpts, String gccLibs, bool keepSource, LogOutFn logOutFn);
 	~ModuleCompiler();
 
 	PModule compile(StrViewA code) const;
+	bool isCompiled(StrViewA code) const;
 
 	static SourceInfo createSource(StrViewA code, String lineMarkerFile) ;
 
@@ -61,6 +63,8 @@ public:
 	int compileFromFile(String file, bool moveToCache);
 	void clearCache();
 
+	LogOutFn setLogOutFn(LogOutFn fn);
+
 protected:
 	String cachePath;
 	String gccPath;
@@ -71,6 +75,9 @@ protected:
 	Value sharedCode;
 
 	bool keepSource;
+	LogOutFn logOutFn;
+
+	void doAddLib(String cachePath, Value lib) const;
 
 };
 

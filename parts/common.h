@@ -9,11 +9,21 @@
 class IProc {
 public:
 
+
+
+	class IRenderFns {
+	public:
+		virtual ListRow getRow() = 0;
+		virtual void send(StrViewA text) = 0;
+		virtual void sendJSON(Value json) = 0;
+		virtual void start(Value resp) = 0;
+		virtual Array lookup(const Array &docs) = 0;
+		virtual Array queryView( StrViewA viewName, const Array &keys, QueryViewOutput outMode = allRows) = 0;
+		virtual ~IRenderFns() {}
+	};
+
 	typedef std::function<void(const Value &key, const Value &value)> EmitFn;
 	typedef std::function<void(const StrViewA &string)> LogFn;
-	typedef std::function<Value()> GetRowFn;
-	typedef std::function<void(const StrViewA &)> SendFn;
-	typedef std::function<void(const Value &)> StartFn;
 
 
 	///Map document to the view
@@ -105,7 +115,7 @@ public:
 
 	virtual void initEmit(EmitFn fn) = 0;
 	virtual void initLog(LogFn fn) = 0;
-	virtual void initShowListFns(GetRowFn getrow, SendFn send, StartFn start) = 0;
+	virtual void initRenderFns(IRenderFns *renderFns) = 0;
 
 	virtual ~IProc() {}
 };
@@ -139,52 +149,31 @@ class AbstractProc: public IProc {
 	 */
 	LogFn fn_log;
 
-	///Function getRow
-	/**
-	 * The function retrieves next row from the result.
-	 * The function is available for the functions list(), update() and show().
-	 * For the functions update() and show() returns only one document (the same document from the argument).
-	 * For the function list() it can iterate through the all results in the requested view. Note that
-	 * there is no way to rewind the iteration. It is always one direction only (like a pipe)
-	 *
-	 * @code
-	 * Value getRow();
-	 * @endcode
-	 *
-	 * @return Function returns next row, or null, if there are no more rows
-	 */
-	GetRowFn fn_getRow;
-
-	///Function initiates output and sets parameters for the output - for instance: http headers
-	/**
-	 * The function is available in list(), update() and show()
-	 *
-	 * @code
-	 * void start(Value setting);
-	 * @endcode
-	 *
-	 * @note function must be called before the function getRow is called otherwise the settings is ignored.
-	 * It can be also called many time before the first getRow causing, that settings from the last
-	 * call is applied.
-	 */
-	StartFn fn_start;
-
-	///Function sends text to the output
-	/**
-	 * The function is available in list(), update() and show()
-	 *
-	 * @code
-	 * void send(StrViewA text);
-	 * @endcode
-	 *
-	 * @param text text send to the output. */
-
-	SendFn fn_send;
-
-
 	Array rowBuffer;
 
 public:
+	class AbstractRenderFns: public IRenderFns {
+	public:
+		virtual ListRow getRow() override {return ListRow();}
+		virtual void send(StrViewA ) override {}
+		virtual void sendJSON(Value ) override {}
+		virtual void start(Value ) override {}
+		virtual Array lookup(const Array &docs) override {return Array();}
+		virtual Array queryView(StrViewA viewName, const Array &keys, QueryViewOutput outMode = allRows) override {
+			Array res;
+			res.reserve(keys.size());
+			for (std::size_t cnt = keys.size(), i = 0; i < cnt; i++) res.push_back(nullptr);
+			return res;
+		}
+	};
+
+	IRenderFns *curRenderFns;
+	AbstractRenderFns fallbackRenderFns;
+
+
+public:
+
+	AbstractProc():curRenderFns(&fallbackRenderFns) {}
 
 
 	///Write key-value pair to the current view
@@ -235,7 +224,7 @@ public:
 	 *
 	 *
 	 */
-	inline ListRow getRow() {return fn_getRow();}
+	inline ListRow getRow() {return curRenderFns->getRow();}
 
 
 
@@ -262,20 +251,57 @@ public:
 	 * @param code status code;
 	 */
 	inline void start(json::Value headers, int code = 200) {
-		fn_start(Object("code",code)("headers",headers));
+		curRenderFns->start(Object("code",code)("headers",headers));
 	}
 	///Send text to the output
 	/**
 	 * @param str text to send
 	 */
-	inline void send(StrViewA str) {fn_send(str);}
+	inline void send(StrViewA str) {curRenderFns->send(str);}
 	///Send json to the outpur
 	/**
 	 *
 	 * @param json json to send
 	 */
-	inline void sendJSON(const json::Value json) {fn_send(json.stringify());}
+	inline void sendJSON(const json::Value json) {curRenderFns->sendJSON(json);}
 
+	///Lookups for given documents
+	/**
+	 * This function allows to query other view. Function can be used during render functions, such
+	 *   a list(), show(), update() and also during validation().
+	 *
+	 * @param docIds array of document IDs. Each item must be json::Value of string type.
+	 * This allows to put json-Value directly from the source json without extracting and re-creating
+	 * a string value
+	 * @return returns object, where key carries the document id and value contains the corresponding document
+	 *
+	 * @note The function is resource intensive and can degrade performance a lot if it is used
+	 * more then few times during rendering the result. It is much faster to ask for multiple documents (it can
+	 * handle a lot of documents at once!) then calling this function for each document separatedly.
+	 */
+	inline Array lookup(const Array &docIds) {return curRenderFns->lookup(docIds);}
+
+	///Query other view.
+	/**
+	 * This function allows to query other view. Function can be used during render functions, such
+	 *   a list(), show(), update() and also during validation(). It is very limited, because it
+	 *   can query for keys only. It doesn't support search for range.
+	 *
+	 * if you want to use "current design document"
+	 * @param viewName name of the view in the design document
+	 * @param keys list of keys to query.
+	 * @param flags Combination of QueryViewFlags: includeDocs and groupRows
+	 * @return List of found rows for each key. Unless groupRows is in effect, there can be multiple rows
+	 * for single key. Each row is represented by a object with following members: "id","key","value","doc". You
+	 * always need to pick "key" from the row to determine which key were used for this row
+	 *
+	 * @note The function is always search in current version of the view (stalled version). It is possible
+	 * to receive an old data in case that view has not been recently updated. If you want to use this
+	 * feature, you need to keep the views updated.
+	 */
+	inline Array queryView(StrViewA viewName, const Array &keys, QueryViewOutput outMode = allRows) {
+		return curRenderFns->queryView(viewName, keys, outMode);
+	}
 
 
 	virtual void mapdoc(Document ) override{
@@ -310,10 +336,8 @@ public:
 
 	virtual void initEmit(EmitFn fn) {fn_emit = fn;}
 	virtual void initLog(LogFn fn) {fn_log = fn;}
-	virtual void initShowListFns(GetRowFn getrow, SendFn send, StartFn start) {
-		this->fn_getRow = getrow;
-		this->fn_send = send;
-		this->fn_start = start;
+	virtual void initRenderFns(IRenderFns *rfns) {
+		if (rfns)curRenderFns = rfns; else curRenderFns = &fallbackRenderFns;
 	}
 };
 
