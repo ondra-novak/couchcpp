@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 add_compile_options(-std=c++11)
-add_executable (couchcpp couchcpp.cpp module.cpp) 
+add_executable (couchcpp couchcpp.cpp module.cpp simplehttp.cpp) 
 target_link_libraries (couchcpp LINK_PUBLIC imtjson dl -rdynamic)
 
 file(GLOB couchcpp_HDR "parts/*.h")

@@ -94,3 +94,21 @@
 ["add_lib",{"aaa":{"bbb":"template <typename LogFn> void hello(LogFn log) { log(\"Hello world\");}"}}]
 ["add_fun","#include \"aaa/bbb\"\n\nvoid mapdoc(Document doc) override {auto mylog=[&](StrViewA msg){log(msg);}; hello(mylog);}"]
 ["map_doc",{"_id":"123"}]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "shows":{"test":"void show(Document doc, Value req) {
+            start(Object(\"headers\",Object(\"Content-Type\",\"text/plain\")));
+            send(String({\"Hello \", String(doc[\"_id\"]), \"!\"}));
+           }"
+            }}]
+["ddoc","new","_design/test",{
+        "_id":"_design/test",
+        "language":"C++",
+        "shows":{"test":"void show(Document doc, Value req) {
+            start(Object(\"Content-Type\",\"text/plain\"),200);
+            send(String({\"Hello \", String(doc[\"_id\"]), \"!\"}));
+           }"
+            }}]
+["ddoc","new","_design/cpp",{"_id":"_design/cpp","_rev":"22-c8dcfb613215490e8263a527d0cc30de","language":"C++","views":{"test1":{"map":"using namespace std;\n\nvoid mapdoc(Document doc) {\n   Value hfid = doc[\"hfid\"];\n   if (hfid.defined()) {\n      StrViewA docid = doc[\"_id\"].getString();\n      std::size_t dotpos = docid.indexOf(\".\");\n      if (dotpos != docid.npos) {\n        StrViewA doctype = docid.substr(0,dotpos);\n        if (hfid.type() == json::array) {\n            for (Value v: hfid) \n                 emit({doctype,v},doc[\"_rev\"]); \n        } else {\n                 emit({doctype,hfid},doc[\"_rev\"]); \n        }\n    } \n  }\n}","reduce":"Value reduce(RowSet rows) override {\n  return rows.size();\n}\n\nValue rereduce(Value values) override {\n unsigned int count = 0;\n  for (Value v : values) count += v.getUInt();\n  return count;\n} "}},"shows":{"request":"void show(Document doc, Value request) {sendJSON(request);}","docs":"void show(Document , Value ) {sendJSON(lookup({\"cmp.1ctuZHNPDkExqiqLnsFu\",\"312312\",\"deqwq\",\"cmp.1ctuX6NP1STA8Vxtlipa\",\"test1\"}));}","query":"void show(Document , Value ) {sendJSON(queryView(\"test1\",{{\"cmp\",139},{\"cmd\",12},{\"ofr\",1015},{\"cmp\",139},{\"aaa\",232}},groupRows));}"}}]
+["ddoc","_design/cpp",["shows","docs"],[null,{"info":{"db_name":"happyfeed_x","doc_count":6336,"doc_del_count":2,"update_seq":6418,"purge_seq":0,"compact_running":false,"disk_size":117903472,"data_size":117353487,"instance_start_time":"1493593731598243","disk_format_version":6,"committed_update_seq":6418},"id":null,"uuid":"f00b6f0b42dd9f41df5dc5ef02000047","method":"GET","requested_path":["happyfeed_x","_design","cpp","_show","docs"],"path":["happyfeed_x","_design","cpp","_show","docs"],"raw_path":"/happyfeed_x/_design/cpp/_show/docs","query":{},"headers":{"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8","Accept-Encoding":"gzip, deflate, sdch, br","Accept-Language":"cs,en-US;q=0.8,en;q=0.6","Cache-Control":"no-cache","Connection":"keep-alive","Cookie":"AuthSession=YnJlZHk6NTkwNjZFNDk69EWDhNYC9CcCyYn_70uCYaFHAwE","Host":"localhost:5984","Pragma":"no-cache","Upgrade-Insecure-Requests":"1","User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/57.0.2987.98 Chrome/57.0.2987.98 Safari/537.36"},"body":"undefined","peer":"127.0.0.1","form":{},"cookie":{"AuthSession":"YnJlZHk6NTkwNjZFNDk69EWDhNYC9CcCyYn_70uCYaFHAwE"},"userCtx":{"db":"happyfeed_x","name":"bredy","roles":["_admin"]},"secObj":{"admins":{"names":[],"roles":[]},"members":{"names":[],"roles":[]}}}]]

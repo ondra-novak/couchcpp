@@ -12,6 +12,7 @@
 #include <fstream>
 
 #include "module.h"
+#include "simplehttp.h"
 
 
 using namespace json;
@@ -25,6 +26,7 @@ std::vector<PModule> views;
 std::map<Hash, PModule> fncache;
 time_t gcrun  = 0;
 
+int dbPort = 5984;
 
 
 void logOut(const StrViewA & msg) {
@@ -81,6 +83,13 @@ protected:
 };
 
 
+static Value dbHttpRequest(String uri, Value postData) {
+	HttpResponse resp =httpRequest(dbPort, uri, postData,Value());
+	return Object("status",resp.status)
+			("message",resp.message)
+			("headers",resp.headers)
+			("body",resp.body);
+}
 
 
 PModule compileFunction(ModuleCompiler& compiler, const StrViewA& cmd) {
@@ -185,17 +194,183 @@ protected:
 	std::vector<char> outbuffer;
 };
 
+class CommonRenderFns: public AbstractProc::AbstractRenderFns {
+public:
+
+	CommonRenderFns(Value request) {
+		Value h = request["headers"];
+		headers = Object("Authorization",h["Authorization"])
+				        ("Cookie",h["Cookie"]);
+		db = String(request["info"]["db_name"]);
+		designDoc = String(request["path"][2]);
+	}
+
+
+	virtual Array lookup(const Array &docs) override {
+		String uri = {"/",encodeURIComponent(db),"/_all_docs?include_docs=true&conflicts=true"};
+		Object post("keys", docs);
+		HttpResponse resp = httpRequest(dbPort,uri,post,headers);
+		if (resp.status != 200) {
+			throw std::runtime_error(String({"lookup() failed with error: ", Value(resp.status).toString(), " ", resp.message}).c_str());
+		}
+		Value rows = resp.body["rows"];
+		auto iter1 = docs.begin();
+		auto iter2 = rows.begin();
+		auto iter1end = docs.end();
+		auto iter2end = rows.end();
+
+		Array res;
+		res.reserve(docs.size());
+		while (iter1 != iter1end) {
+			if (iter2 != iter2end && (*iter1) == (*iter2)["key"]) {
+				Value doc = (*iter2)["doc"];
+				if (doc.defined()) {
+					res.push_back(doc);
+				} else {
+					res.push_back(nullptr);
+				}
+				++iter1;
+				++iter2;
+			} else {
+				res.push_back(nullptr);
+				++iter1;
+			}
+		}
+
+		return res;
+	}
+	virtual Array queryView( StrViewA viewName, const Array &keys,  QueryViewOutput outMode = allRows) override {
+		StrViewA flags;
+		switch (outMode) {
+		case allRows: flags="reduce=false&";break;
+		case allRows_IncludeDocs: flags="reduce=false&include_docs=true&conflicts=true&";break;
+		case groupRows: flags="group=true&";break;
+		}
+
+		String fullViewName;
+		if (viewName.substr(0,8) == "_design/") fullViewName = viewName;
+		else fullViewName = {"_design/",encodeURIComponent(designDoc),"/_view/",encodeURIComponent(viewName)};
+
+		String uri = {"/",encodeURIComponent(db),"/", fullViewName,"?",
+					flags,"stale=update_after"};
+
+		Object post("keys", keys);
+		HttpResponse resp = httpRequest(dbPort,uri,post,headers);
+		if (resp.status != 200) {
+			throw std::runtime_error(String({"queryView() failed with error: ", Value(resp.status).toString(), " ", resp.message}).c_str());
+		}
+		Value rows = resp.body["rows"];
+		Array result;
+		Array collect;
+
+		result.reserve(keys.size());
+		collect.reserve(rows.size());
+
+		auto iter1 = keys.begin();
+		auto iter2 = rows.begin();
+		auto iter1end = keys.end();
+		auto iter2end = rows.end();
+
+		while (iter1 != iter1end) {
+			if (iter2 != iter2end && (*iter1) == (*iter2)["key"]) {
+				if (outMode == groupRows) {
+					result.push_back(*iter2);
+					++iter1;
+					++iter2;
+				} else {
+					collect.clear();
+					collect.push_back(*iter2);
+					++iter2;
+					while (iter2 != iter2end && *iter1 == (*iter2)["key"]) {
+						collect.push_back(*iter2);
+						++iter2;
+					}
+					result.push_back(collect);
+					++iter1;
+				}
+
+			} else {
+				result.push_back(nullptr);
+				++iter1;
+			}
+		}
+		return result;
+	}
+
+protected:
+	Value headers;
+	String db;
+	String designDoc;
+};
 
 static TextBuffer buff;
+
+
+class ShowUpdateRenderFns: public CommonRenderFns {
+public:
+
+	ShowUpdateRenderFns(Value request, TextBuffer& buff, Value &respObj)
+		:CommonRenderFns(request),buff(buff),respObj(respObj) {}
+	virtual void send(StrViewA txt) override {
+		buff.push_back(txt);
+	}
+	virtual void sendJSON(Value v) override {
+		buff.push_back(v.stringify());
+	}
+	virtual void start(Value respObj) override {
+			this->respObj = respObj;
+	}
+protected:
+	TextBuffer& buff;
+	Value &respObj;
+};
+
+
+class ListRenderFns: public ShowUpdateRenderFns {
+public:
+	ListRenderFns(Value request , TextBuffer& buff, JSONStream &stream)
+		:ShowUpdateRenderFns(request,buff,respObj), buff(buff),stream(stream)
+		,needStart(true)
+		,isEnd(false) {}
+
+	ListRow getRow() override {
+		if (isEnd) return Value(nullptr);
+		Value s;
+		if (needStart) {
+			s = {"start",buff.getChunks(), respObj};
+			needStart = false;
+		} else {
+			s = {"chunks",buff.getChunks()};
+		}
+		buff.clear();
+		stream.write(s);
+		Value r = stream.read();
+		StrViewA cmd = r[0].getString();
+		if (cmd == "list_row") {
+			return r[1];
+		} else {
+			isEnd = true;
+			return Value(nullptr);
+		}
+	}
+
+protected:
+	TextBuffer& buff;
+	JSONStream &stream;
+	Value respObj;
+	bool needStart;
+	bool isEnd;
+
+};
+
 
 var doCommandDDocShow(IProc &proc, Value args) {
 	buff.clear();
 	Value respObj(json::object);
 	Value doc = args[0];
 	Value request = args[1];
-	proc.initShowListFns([&]() -> ListRow { return Value(nullptr);},
-			[](const StrViewA &v) {buff.push_back(v);},
-	         [&](const Value &resp) {respObj = resp;});
+	ShowUpdateRenderFns renderFn(request, buff, respObj);
+	proc.initRenderFns(&renderFn);
 	proc.show(doc,request);
 	return {"resp",respObj.replace(Path::root/"body",buff.str())};
 }
@@ -206,9 +381,8 @@ var doCommandDDocUpdates(IProc &proc, Value args) {
 	Document doc = args[0];
 	Document newdoc = doc;
 	Value request = args[1];
-	proc.initShowListFns([&] () -> ListRow { return Value(nullptr);},
-			[](const StrViewA &v) {buff.push_back(v);},
-			[&](const Value &resp) {respObj = resp;});
+	ShowUpdateRenderFns renderFn(request, buff, respObj);
+	proc.initRenderFns(&renderFn);
 	proc.update(newdoc,request);
 	if (newdoc.isCopyOf(doc)) newdoc = Value( nullptr);
 	return {"up",newdoc,respObj.replace(Path::root/"body",buff.str())};
@@ -221,37 +395,10 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 	Value request = args[1];
 	bool isend = false;
 	bool needstart = true;
-	proc.initShowListFns(
-			[&]() -> Value {
-				if (isend) return nullptr;
-				Value s;
-				if (needstart) {
-					s = {"start",buff.getChunks(), respObj};
-					needstart = false;
-				} else {
-					s = {"chunks",buff.getChunks()};
-				}
-				buff.clear();
-				stream.write(s);
-				Value r = stream.read();
-				StrViewA cmd = r[0].getString();
-				if (cmd == "list_row") {
-					return r[1];
-				} else {
-					isend = true;
-					return nullptr;
-				}
-			},
-			[](const StrViewA &v) {buff.push_back(v);},
-			[&](const Value &resp) {respObj = resp;});
-
+	ListRenderFns renderFn(request,buff, stream);
+	proc.initRenderFns(&renderFn);
 	proc.list(head,request);
-	if (needstart) {
-		respObj = respObj.replace("stop",true);
-		stream.write({"start",buff.getChunks(),respObj});
-		Value r = stream.read();
-		buff.clear();
-	}
+	//ensure, that getRow will be called at least once
 	return {"end",buff.getChunks()};
 }
 
@@ -287,6 +434,7 @@ var doCommandDDocValidate(IProc &proc, Value args) {
 	Value prevDoc = args[1];
 	Value userContext = args[2];
 	Value security = args[3];
+
 
 	ValidationResult res = proc.validate(doc,ContextData(prevDoc, userContext, security));
 	switch (res.decree) {
@@ -351,6 +499,7 @@ var doCommandDDoc(ModuleCompiler &compiler, const var &cmd, JSONStream &stream) 
 		PModule a = compileFunction(compiler,fn.getString());
 		IProc *proc = a->getProc();
 
+
 		if (callType == "shows") return doCommandDDocShow(*proc, cmd[3]);
 		else if (callType == "lists") return doCommandDDocList(*proc, cmd[3], stream);
 		else if (callType == "updates") return doCommandDDocUpdates(*proc, cmd[3]);
@@ -389,6 +538,7 @@ int main(int argc, char **argv) {
 		String cfgpath = "/etc/couchdb/couchcpp.conf";
 		String tryCompile;
 		String cacheOverride;
+		String test_urlPath;
 		std::vector<String> populate;
 		bool clearcache = false;
 		bool needPopulate = false;
@@ -442,12 +592,18 @@ int main(int argc, char **argv) {
 				if (argp >= argc) throw std::runtime_error("Missing argument after -o");
 				cacheOverride = relpath(cwd,argv[argp++]);
 			}
+			else if (a == "-w") {
+				if (argp < argc)
+					test_urlPath = argv[argp++];
+			}
 
 		}
 
 		cfgpath = relpath(cwd, cfgpath);
 		Value cfg = loadConfig(relpath(cwd,cfgpath));
 		cwd = cfgpath.substr(0, cfgpath.lastIndexOf("/"));
+
+
 
 
 		Value x = cfg["cache"];
@@ -462,12 +618,21 @@ int main(int argc, char **argv) {
 		x = cfg["compiler"]["libs"];
 		String strlibs(x);
 
+		x = cfg["port"];
+		if (x.getUInt()!= 0) dbPort = x.getUInt();
+
+
 		bool keepSources = cfg["keepSource"].getBool();
 		if (!cacheOverride.empty()) strcache = cacheOverride;
 
 
 		ModuleCompiler compiler(strcache, strcompiler, strparams, strlibs, keepSources);
 
+		if (!test_urlPath.empty()) {
+			Value resp = dbHttpRequest(test_urlPath,json::undefined);
+			resp.toStream(std::cout);
+			return 0;
+		}
 		if (clearcache) {
 			compiler.clearCache();
 		}
