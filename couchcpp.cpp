@@ -687,7 +687,6 @@ int main(int argc, char **argv) {
 		x = cfg["port"];
 		if (x.getUInt()!= 0) dbPort = x.getUInt();
 
-
 		bool keepSources = cfg["keepSource"].getBool();
 		if (!cacheOverride.empty()) strcache = cacheOverride;
 
