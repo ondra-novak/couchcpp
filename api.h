@@ -273,7 +273,7 @@ enum QueryViewOutput {
 	allRows,
 	///For each key, return all matching rows and associated documents
 	/** It put rows into array, even if there is only one row */
-	allRows_IncludeDocs,
+	allRows_includeDocs,
 	///For each key, group rows into single row
 	/** It put one row for each key */
 	groupRows

@@ -245,7 +245,7 @@ public:
 		StrViewA flags;
 		switch (outMode) {
 		case allRows: flags="reduce=false&";break;
-		case allRows_IncludeDocs: flags="reduce=false&include_docs=true&conflicts=true&";break;
+		case allRows_includeDocs: flags="reduce=false&include_docs=true&conflicts=true&";break;
 		case groupRows: flags="group=true&";break;
 		}
 
@@ -296,6 +296,8 @@ public:
 				++iter1;
 			}
 		}
+		if (iter2 != iter2end)
+			throw std::runtime_error(String({"Unexpected keys in the result: ",(*iter2)["key"].stringify(),". Try \"options\":{\"collation\":\"raw\"} into the view"}).c_str());
 		return result;
 	}
 
@@ -332,6 +334,7 @@ class ListRenderFns: public ShowUpdateRenderFns {
 public:
 	ListRenderFns(Value request , TextBuffer& buff, JSONStream &stream)
 		:ShowUpdateRenderFns(request,buff,respObj), buff(buff),stream(stream)
+		,respObj(json::object)
 		,needStart(true)
 		,isEnd(false) {}
 
