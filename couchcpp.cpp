@@ -187,8 +187,8 @@ public:
 		outbuffer.reserve(outbuffer.size()+txt.length);
 		for (auto c: txt) outbuffer.push_back(c);
 	}
-	Value getChunks() const {
-		if (outbuffer.empty()) return Value(json::array);
+	Value getChunks(bool forceEmpty = false) const {
+		if (outbuffer.empty() && !forceEmpty) return Value(json::array);
 		else return Value(json::array,{str()});
 	}
 
@@ -342,7 +342,7 @@ public:
 		if (isEnd) return Value(nullptr);
 		Value s;
 		if (needStart) {
-			s = {"start",buff.getChunks(), respObj};
+			s = {"start",buff.getChunks(true), respObj};
 			needStart = false;
 		} else {
 			s = {"chunks",buff.getChunks()};
@@ -357,6 +357,10 @@ public:
 			isEnd = true;
 			return Value(nullptr);
 		}
+	}
+
+	~ListRenderFns() {
+		if (needStart) getRow();
 	}
 
 protected:
@@ -400,9 +404,11 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 	Value request = args[1];
 	bool isend = false;
 	bool needstart = true;
-	ListRenderFns renderFn(request,buff, stream);
-	proc.initRenderFns(&renderFn);
-	proc.list(head,request);
+	{
+		ListRenderFns renderFn(request,buff, stream);
+		proc.initRenderFns(&renderFn);
+		proc.list(head,request);
+	}
 	//ensure, that getRow will be called at least once
 	return {"end",buff.getChunks()};
 }
