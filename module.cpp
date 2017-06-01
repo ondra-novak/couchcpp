@@ -400,7 +400,7 @@ int ModuleCompiler::compileFromFile(String file, bool moveToCache) {
 		" ",gccLibs});
 
 	logOutFn(cmdLine);
-	int res = system(cmdLine.c_str());
+	int res = WEXITSTATUS(system(cmdLine.c_str()));
 	if (res == 0) {
 		try {
 			Module testOpen(tmpObj);
