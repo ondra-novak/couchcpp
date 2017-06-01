@@ -717,7 +717,13 @@ int main(int argc, char **argv) {
 			if (populate.empty()) {
 					std::cerr << "Nothing to populate" << std::endl;
 			} else {
-				for (auto s: populate) compiler.compileFromFile(s,true);
+				for (auto s: populate) {
+					int res = compiler.compileFromFile(s,true);
+					if (res) {
+						std::cerr << "Error detected, stopping population" << std::endl;
+						return res;
+					}
+				}
 			}
 			return 0;
 		}
