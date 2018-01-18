@@ -49,7 +49,7 @@ void runGC() {
 
 
 
- var doResetCommand(ModuleCompiler &comp, const var &cmd) {
+ var doResetCommand(ModuleCompiler &comp, const var &) {
  	views.clear();
  	runGC();
  	comp.dropEnv();
@@ -402,8 +402,8 @@ var doCommandDDocList(IProc &proc, Value args, JSONStream &stream) {
 	Value respObj(json::object);
 	Value head = args[0];
 	Value request = args[1];
-	bool isend = false;
-	bool needstart = true;
+	//bool isend = false;
+	//bool needstart = true;
 	{
 		ListRenderFns renderFn(request,buff, stream);
 		proc.initRenderFns(&renderFn);

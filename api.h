@@ -21,9 +21,6 @@
 using namespace json;
 
 
-namespace {
-
-
 inline String encodeURIComponent(StrViewA component) {
 	return String(urlEncoding->encodeBinaryValue(BinaryView(component)));
 }
@@ -407,7 +404,7 @@ inline Array queryView(StrViewA viewName, const Array &keys, QueryViewOutput out
 
 #endif
 
-}
+
 
 
 

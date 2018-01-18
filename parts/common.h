@@ -158,8 +158,8 @@ public:
 		virtual void send(StrViewA ) override {}
 		virtual void sendJSON(Value ) override {}
 		virtual void start(Value ) override {}
-		virtual Array lookup(const Array &docs) override {return Array();}
-		virtual Array queryView(StrViewA viewName, const Array &keys, QueryViewOutput outMode = allRows) override {
+		virtual Array lookup(const Array &) override {return Array();}
+		virtual Array queryView(StrViewA , const Array &keys, QueryViewOutput ) override {
 			Array res;
 			res.reserve(keys.size());
 			for (std::size_t cnt = keys.size(), i = 0; i < cnt; i++) res.push_back(nullptr);
@@ -307,7 +307,7 @@ public:
 	virtual void mapdoc(Document ) override{
 		throw std::runtime_error("Function 'void mapdoc(Document)' is not defined");
 	}
-	virtual Value reduce(RowSet rows) override {
+	virtual Value reduce(RowSet ) override {
 		throw std::runtime_error("Function 'Value reduce(RowSet rows)' is not defined");
 	}
 	virtual Value rereduce(Value ) override {
