@@ -21,7 +21,7 @@
 using namespace json;
 
 
-namespace {
+
 
 
 
@@ -351,7 +351,7 @@ void sendJSON(const json::Value json);
 
 #endif
 
-}
+
 
 
 

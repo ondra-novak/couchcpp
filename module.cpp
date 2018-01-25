@@ -176,7 +176,7 @@ SeparatedSrc separateSrc(StrViewA src, StrViewA lineMarkerFile) {
 	};
 
 	auto checkKw = [&](int c, StrViewA kw, bool rewind) {
-		int z = 0;
+		unsigned int z = 0;
 		while (z < kw.length && ((kw[z] == ' ' && isspace(c)) || (kw[z] == (char)c))) {
 			z++;
 			c = getNext();
