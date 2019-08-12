@@ -334,9 +334,9 @@ public:
 	virtual void onClose()override {delete this;}
 
 
-	virtual void initEmit(EmitFn fn) {fn_emit = fn;}
-	virtual void initLog(LogFn fn) {fn_log = fn;}
-	virtual void initRenderFns(IRenderFns *rfns) {
+	virtual void initEmit(EmitFn fn) override {fn_emit = fn;}
+	virtual void initLog(LogFn fn) override {fn_log = fn;}
+	virtual void initRenderFns(IRenderFns *rfns) override {
 		if (rfns)curRenderFns = rfns; else curRenderFns = &fallbackRenderFns;
 	}
 };
